@@ -145,12 +145,26 @@ node scoring-engine/build-bundle.js
 node scoring-engine/verify-bundle.js
 ```
 
+### Create credentials in n8n
+
+Before importing the workflows, create these five credentials in n8n's **Settings → Credentials → New**. Naming matters: the workflow JSONs reference credentials by name, so use exactly these names to avoid manual re-linking after import.
+
+| Credential type to pick | Credential name | What it needs |
+|---|---|---|
+| **HubSpot Service Key** (despite the name, accepts Private/Legacy App access tokens) | `Pemo HubSpot` | `HUBSPOT_ACCESS_TOKEN` from your `.env` |
+| **Trello API** | `Pemo Trello` | `TRELLO_API_KEY` and `TRELLO_TOKEN` from your `.env` |
+| **Slack API** (NOT OAuth2) | `Pemo Slack Bot` | `SLACK_BOT_TOKEN` from your `.env` (starts with `xoxb-`). Bot must be invited to `#leads-hot`, `#leads-alerts`, `#leads-digest`, or you must add `chat:write.public` scope. |
+| **OpenAI API** | `Pemo OpenAI` | `OPENAI_API_KEY` from your `.env` |
+| **Gmail OAuth2 API** | `Pemo Gmail` | OAuth flow inside n8n (sign in with the Google account that should send outreach emails) |
+
+If you use different credential names, you will need to manually re-link each node after workflow import. Five credentials total.
+
 ### Import workflows into n8n
 
-For each file in `workflows/`:
+Once credentials exist, for each file in `workflows/`:
 
-1. n8n: New Workflow, then ⋯ menu, then Import from File.
-2. After import, click each node showing a credential warning and select the matching credential by name.
+1. n8n: **+ New Workflow**, then **⋯** menu, then **Import from File**.
+2. n8n auto-resolves credentials by matching name. If any node still shows a credential warning, click it and select the credential manually.
 3. Save.
 
 ### Wire up
