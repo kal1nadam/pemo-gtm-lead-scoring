@@ -1,0 +1,18 @@
+{
+  "_comment": "Sample inbound payload simulating an event registration (Cairo Fintech Summit) — different schema shape from website form, exercises the normalization layer.",
+  "source": "event",
+  "event_name": "Cairo Fintech Summit 2026",
+  "registered_at": "2026-05-01T07:00:00Z",
+  "attendee": {
+    "company": "Cairo Tech Solutions",
+    "name": "Omar Mahmoud",
+    "work_email": "omar@cairotech.eg",
+    "phone_number": "+201012345678",
+    "country_code": "EG",
+    "team_size": "80",
+    "industry": "saas",
+    "interest": "demo",
+    "notes": "Met your team at the Cairo Fintech Summit. We're actively switching from Spendesk — pricing isn't working for us. Need to evaluate ASAP, decision this month.",
+    "lang": "en"
+  }
+}

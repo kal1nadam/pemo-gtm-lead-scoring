@@ -1,0 +1,586 @@
+{
+  "name": "Pemo: Cold Nurture",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "81cb2261-a26c-45ed-bd57-9383676998f0",
+      "name": "Sub-flow Trigger",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [
+        288,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.scoring.disqualified }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "bc9abb9a-7a8a-47b0-8124-86aa97729841",
+      "name": "Disqualified?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        512,
+        544
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#leads-alerts",
+          "mode": "name"
+        },
+        "text": "={{ (() => { const l = $('Sub-flow Trigger').item.json; return `🚫 *Disqualified lead logged (no email sent)*\\n\\n*${l.company_name}* (${l.country})  ·  ${l.contact_name}\\n_Reason:_ ${(l.scoring.breakdown.intent.signals || []).join('; ')}\\n\\nNo nurture email sent. Lead recorded in HubSpot for audit.\\n🔗 <${l._hubspot.contact_url}|HubSpot>`; })() }}",
+        "otherOptions": {}
+      },
+      "id": "eb8c6cc2-049d-4784-89b4-13c84b0db5b9",
+      "name": "Slack: Disqualified Notice",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        736,
+        352
+      ],
+      "webhookId": "82376ad0-d81a-4d67-a39c-858e14e6eefb",
+      "credentials": {
+        "slackApi": {
+          "id": "ppXNa85asyVoCHYl",
+          "name": "Pemo Slack Bot"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ `https://api.hubapi.com/crm/v3/objects/contacts/${$('Sub-flow Trigger').item.json._hubspot.contact_id}` }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"properties\": {\n    \"pemo_sequence_step\": \"cold_disqualified_no_send\"\n  }\n}",
+        "options": {}
+      },
+      "id": "c7cd3165-a97d-42e7-868a-6b4d79e5f869",
+      "name": "HubSpot: Mark Disqualified",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        352
+      ],
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "KW7zeDVcuBn5tSOO",
+          "name": "Pemo Hubspot"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are writing a single educational email for the COLD nurture stream at Pemo, a B2B fintech serving SMEs in MENA.\n\nThis lead scored low (out of geo, low intent, missing data, or just early-stage). They are NOT a buying prospect today. The goal is to be useful, not to sell.\n\nTone: friendly, informative, zero sales pressure. Think \"newsletter editor\", not \"sales rep\".\n\nMust:\n- 4-6 sentences MAX\n- Share ONE useful insight relevant to their industry or country (e.g., common SME expense management mistake, a stat, a practical tip)\n- Mention you'll occasionally share more useful content via the Pemo newsletter\n- Provide a clear opt-out signal (a one-line unsubscribe note)\n- NO demo CTA. No 'book a call'. No 'happy to chat'.\n- Sign off as 'The Pemo team'\n\nOutput: JSON {subject, body}. No markdown, no preamble.\nIf language is 'ar', entire email in Arabic. Otherwise English. No mixing.",
+              "role": "system"
+            },
+            {
+              "content": "=Lead profile:\n- Company: {{ $('Sub-flow Trigger').item.json.company_name }} ({{ $('Sub-flow Trigger').item.json.country }}, {{ $('Sub-flow Trigger').item.json.industry }})\n- Contact: {{ $('Sub-flow Trigger').item.json.contact_name }} ({{ $('Sub-flow Trigger').item.json.email }})\n- Language: {{ $('Sub-flow Trigger').item.json.language }}\n\nWrite the educational nurture email now. Output JSON only."
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 400,
+          "temperature": 0.6
+        }
+      },
+      "id": "6f3e930d-6dba-402a-b07c-4b13c1e83cc2",
+      "name": "AI: Educational Email",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.7,
+      "position": [
+        736,
+        672
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "YQSOdRshnmOCa4eW",
+          "name": "Pemo OpenAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sendTo": "=kalinaadam75@seznam.cz",
+        "subject": "={{ $json._outreach.subject }}",
+        "emailType": "text",
+        "message": "={{ $json._outreach.body }}",
+        "options": {}
+      },
+      "id": "60cb23c9-39f3-414d-aea7-1f02ee952bc9",
+      "name": "Gmail: Send Cold Email",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        1280,
+        672
+      ],
+      "webhookId": "ec4c841f-d328-46cf-87fe-d29dd6b98178",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "yblhyc9sgHFejXCh",
+          "name": "Pemo Gmail"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/emails",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ (() => { const l = $('Parse Cold Email').item.json; return JSON.stringify({ properties: { hs_timestamp: $now.toMillis(), hs_email_direction: 'EMAIL', hs_email_status: 'SENT', hs_email_subject: l._outreach.subject, hs_email_text: l._outreach.body, hs_email_headers: JSON.stringify({ from: { email: (l._assignment && l._assignment.rep_email) || 'team@pemo.io', firstName: (l._assignment && l._assignment.rep_name) || 'The Pemo Team' }, to: [{ email: l.email, firstName: l.contact_name }] }) }, associations: [ { to: { id: l._hubspot.contact_id }, types: [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId: 198 }] } ] }); })() }}",
+        "options": {}
+      },
+      "id": "c233dc61-e14f-4c0f-b6b7-7d7662170a94",
+      "name": "HubSpot: Log Cold Email",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1504,
+        672
+      ],
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "KW7zeDVcuBn5tSOO",
+          "name": "Pemo Hubspot"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ `https://api.hubapi.com/crm/v3/objects/contacts/${$('Parse Cold Email').item.json._hubspot.contact_id}` }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"properties\": {\n    \"pemo_sequence_step\": \"cold_nurture_sent\"\n  }\n}",
+        "options": {}
+      },
+      "id": "dae1c414-0a5b-44db-a11a-62d90e4d9146",
+      "name": "HubSpot: Mark Cold Sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1728,
+        672
+      ],
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "KW7zeDVcuBn5tSOO",
+          "name": "Pemo Hubspot"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#leads-digest",
+          "mode": "name"
+        },
+        "text": "={{ (() => { const l = $('Parse Cold Email').item.json; return `❄️ *Cold lead nurtured*\\n\\n*${l.company_name}* (${l.country}, ${l.industry})  ·  ${l.contact_name}\\n_Reason cold:_ ${l.scoring.rationale_summary}\\n\\nEducational email sent (subject: _${l._outreach.subject}_). Tagged in HubSpot for newsletter.\\n\\n🔗 <${l._hubspot.contact_url}|HubSpot>`; })() }}",
+        "otherOptions": {}
+      },
+      "id": "639ff045-a729-4748-b405-35796f66a09d",
+      "name": "Slack: Cold Logged",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1952,
+        672
+      ],
+      "webhookId": "93ce3576-ac5a-49a7-a722-6f508f178cd4",
+      "credentials": {
+        "slackApi": {
+          "id": "ppXNa85asyVoCHYl",
+          "name": "Pemo Slack Bot"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "content": "## ❄️ Cold Nurture\n\nSub-workflow triggered by **MAIN** when a lead scores below 50.\n\n**First branch** handles disqualified leads (negative intent like \"remove me\" or \"not interested\"). No email is sent. Respect the user. Lead is logged in HubSpot for audit and Slack alerts the team.\n\n**Second branch** sends a single educational email. Tone is editorial, not sales. The LLM is explicitly told no demo CTA, no \"happy to chat\". Just a useful insight relevant to their industry, with a clear opt-out and a soft note about the newsletter.\n\nWhy a single email and not a multi-step drip: cold leads at this score level rarely convert from outbound. Producing more email pressure burns brand more than it generates pipeline. The newsletter does the long-term nurture.\n\nLead state lands in HubSpot as `cold_nurture_sent` or `cold_disqualified_no_send`. Both visible to WF-MONITORING.",
+        "height": 364,
+        "width": 624
+      },
+      "id": "6777285c-4937-4785-8b71-852691ed0a09",
+      "name": "Sticky: Cold Nurture overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -16,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Sub-flow Trigger').item.json;\nconst ai = $input.item.json;\n\nfunction extractContent(o) {\n  if (Array.isArray(o.output) && o.output[0]?.content) {\n    const block = o.output[0].content.find((c) => c.type === 'output_text' || typeof c.text === 'string');\n    if (block?.text) return block.text;\n  }\n  if (typeof o.text === 'string') return o.text;\n  if (o.message?.content) return o.message.content;\n  if (o.choices?.[0]?.message?.content) return o.choices[0].message.content;\n  return '';\n}\n\nlet raw = extractContent(ai).trim().replace(/^```(?:json)?\\s*/i, '').replace(/```\\s*$/, '').trim();\nlet parsed;\ntry { parsed = JSON.parse(raw); } catch (e) { parsed = { subject: 'A useful note from Pemo', body: raw }; }\n\nreturn {\n  json: {\n    ...lead,\n    _outreach: {\n      channel: 'cold',\n      step: 'cold_day_0',\n      subject: parsed.subject || 'A useful note from Pemo',\n      body: parsed.body || '',\n      to: lead.email,\n      generated_at: new Date().toISOString()\n    }\n  }\n};"
+      },
+      "id": "9c4f17ca-9899-462e-a7dd-9e314c691471",
+      "name": "Parse Cold Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1072,
+        672
+      ]
+    }
+  ],
+  "pinData": {
+    "Sub-flow Trigger": [
+      {
+        "json": {
+          "company_name": "GreenLeaf Agriculture Co",
+          "contact_name": "Mark Chen",
+          "email": "mark@greenleaf.ca",
+          "email_domain": "greenleaf.ca",
+          "phone": "+14155550100",
+          "country": "CA",
+          "company_size": "8",
+          "source": "website_form",
+          "raw_message": "Browsing for accounting tools, found your site.",
+          "language": "en",
+          "form_intent": "info",
+          "visit_count": 1,
+          "industry": "agriculture",
+          "website": "https://greenleaf.ca",
+          "tech_stack": [],
+          "company_name_native": null,
+          "partner_name": null,
+          "partner_id": null,
+          "event_name": null,
+          "submitted_at": "2026-04-15T10:00:00Z",
+          "_request_id": "req_moq7grog_1mgtivzl",
+          "_source_shape": "website_form",
+          "_ingested_at": "2026-05-03T20:10:46.432Z",
+          "_schema_version": "1.0.0",
+          "_validation": {
+            "valid": true,
+            "errors": [],
+            "warnings": []
+          },
+          "existing_customer": false,
+          "hubspot_contact_id": null,
+          "hubspot_existing_properties": null,
+          "_dedup": {
+            "matched_on": null,
+            "search_total": 0
+          },
+          "_enrichment": {
+            "mode": "mock",
+            "matched": true,
+            "matched_on": "email_domain_exact",
+            "domain": "greenleaf.ca",
+            "is_public_email": false,
+            "fields_filled": [
+              "website",
+              "tech_stack"
+            ]
+          },
+          "scoring": {
+            "total": 35.8,
+            "tier": "cold",
+            "breakdown": {
+              "firmographic": {
+                "raw": 0.23,
+                "weighted": 7.88,
+                "max": 35,
+                "signals": [
+                  "country: country CA outside primary ICP (0.15)",
+                  "size: 8 employees → marginal small (0.4)",
+                  "industry: low-fit industry (agriculture) (0.15)"
+                ]
+              },
+              "intent": {
+                "raw": 0.36,
+                "weighted": 10.8,
+                "max": 30,
+                "signals": [
+                  "low-intent keywords: browsing",
+                  "general inquiry form intent: \"info\" (+0.16)"
+                ]
+              },
+              "source_quality": {
+                "raw": 0.6,
+                "weighted": 12,
+                "max": 20,
+                "signals": [
+                  "source \"direct\" weighted at 0.6"
+                ]
+              },
+              "engagement": {
+                "raw": 0.34,
+                "weighted": 5.1,
+                "max": 15,
+                "signals": [
+                  "submitted 3w ago → stale",
+                  "first visit"
+                ]
+              }
+            },
+            "confidence": {
+              "score": 0.93,
+              "missing_fields": [
+                "tech_stack"
+              ],
+              "breakdown": {
+                "required": "3/3",
+                "important": "3/3",
+                "enrichment": "2/3"
+              }
+            },
+            "disqualified": false,
+            "score_version": "1.0.0",
+            "scored_at": "2026-05-03T20:10:46.770Z",
+            "rationale_summary": "COLD (35.78/100) | strongest: source_quality (12/20) | weakest: engagement (5.1/15)"
+          },
+          "qualification_summary": "GreenLeaf Agriculture Co is a cold lead due to its location in Canada, which is outside our primary ICP, and its small size of 8 employees in a low-fit industry. The inquiry was general, indicating low intent. Recommend nurturing this lead for future engagement.",
+          "_ai": {
+            "model": "gpt-4o-mini",
+            "generated_at": "2026-05-03T20:10:49.609Z"
+          },
+          "_hubspot_payload": {
+            "inputs": [
+              {
+                "idProperty": "email",
+                "id": "mark@greenleaf.ca",
+                "properties": {
+                  "email": "mark@greenleaf.ca",
+                  "firstname": "Mark",
+                  "lastname": "Chen",
+                  "phone": "+14155550100",
+                  "company": "GreenLeaf Agriculture Co",
+                  "country": "CA",
+                  "website": "https://greenleaf.ca",
+                  "industry": "agriculture",
+                  "pemo_lead_score": 35.8,
+                  "pemo_lead_tier": "cold",
+                  "pemo_score_version": "1.0.0",
+                  "pemo_last_scored_at": "2026-05-03T20:10:46.770Z",
+                  "pemo_score_rationale": "{\"firmographic\":{\"raw\":0.23,\"weighted\":7.88,\"max\":35,\"signals\":[\"country: country CA outside primary ICP (0.15)\",\"size: 8 employees → marginal small (0.4)\",\"industry: low-fit industry (agriculture) (0.15)\"]},\"intent\":{\"raw\":0.36,\"weighted\":10.8,\"max\":30,\"signals\":[\"low-intent keywords: browsing\",\"general inquiry form intent: \\\"info\\\" (+0.16)\"]},\"source_quality\":{\"raw\":0.6,\"weighted\":12,\"max\":20,\"signals\":[\"source \\\"direct\\\" weighted at 0.6\"]},\"engagement\":{\"raw\":0.34,\"weighted\":5.1,\"max\":15,\"signals\":[\"submitted 3w ago → stale\",\"first visit\"]}}",
+                  "pemo_qualification_summary": "GreenLeaf Agriculture Co is a cold lead due to its location in Canada, which is outside our primary ICP, and its small size of 8 employees in a low-fit industry. The inquiry was general, indicating low intent. Recommend nurturing this lead for future engagement.",
+                  "pemo_firmographic_score": 7.88,
+                  "pemo_intent_score": 10.8,
+                  "pemo_source_score": 12,
+                  "pemo_engagement_score": 5.1,
+                  "pemo_confidence": 0.93,
+                  "pemo_country_tier": "out_of_market",
+                  "pemo_lead_source_channel": "direct",
+                  "pemo_form_intent": "info",
+                  "pemo_inbound_source_shape": "website_form",
+                  "pemo_request_id": "req_moq7grog_1mgtivzl",
+                  "pemo_existing_customer": "false",
+                  "pemo_disqualified": "false",
+                  "pemo_company_size_band": "micro",
+                  "pemo_visit_count": 1,
+                  "pemo_language": "en",
+                  "pemo_raw_message": "Browsing for accounting tools, found your site.",
+                  "pemo_tech_stack_signals": ""
+                }
+              }
+            ]
+          },
+          "_hubspot_canonical_source": "direct",
+          "_hubspot": {
+            "contact_id": "770854115553",
+            "contact_url": "https://app-eu1.hubspot.com/contacts/148389230/record/0-1/770854115553",
+            "created": false,
+            "status": "COMPLETE",
+            "synced_at": "2026-05-03T20:10:49.962Z"
+          },
+          "_trello_payload": {
+            "idList": "69f4e03f38ac39b5376ccea0",
+            "name": "[35.8] GreenLeaf Agriculture Co — Mark Chen",
+            "desc": "**Tier:** COLD — 35.8/100  |  Confidence: 0.93\n\n**Qualification Summary**\nGreenLeaf Agriculture Co is a cold lead due to its location in Canada, which is outside our primary ICP, and its small size of 8 employees in a low-fit industry. The inquiry was general, indicating low intent. Recommend nurturing this lead for future engagement.\n\n**Lead Profile**\n- Country: CA  |  Industry: agriculture  |  Size: 8\n- Source: direct (raw: website_form)\n- Language: en\n- Tech stack: _none detected_\n\n**Score Breakdown**\n- **Firmographic** 7.88/35\n  - country: country CA outside primary ICP (0.15)\n  - size: 8 employees → marginal small (0.4)\n  - industry: low-fit industry (agriculture) (0.15)\n- **Intent** 10.8/30\n  - low-intent keywords: browsing\n  - general inquiry form intent: \"info\" (+0.16)\n- **Source Quality** 12/20\n  - source \"direct\" weighted at 0.6\n- **Engagement** 5.1/15\n  - submitted 3w ago → stale\n  - first visit\n\n**Inbound Message**\n> Browsing for accounting tools, found your site.\n\n---\n🔗 [HubSpot Contact](https://app-eu1.hubspot.com/contacts/148389230/record/0-1/770854115553)  |  📧 mark@greenleaf.ca  |  ☎️ +14155550100\nRequest ID: `req_moq7grog_1mgtivzl`",
+            "idLabels": [
+              "69f51415773125b0473d6c3a",
+              "69f514164812f20f0148b79e",
+              "69f51418f1bdf3c3aa7f21ac",
+              "69f5141a4b8802e2b0a4e9ca"
+            ],
+            "idLabels_csv": "69f51415773125b0473d6c3a,69f514164812f20f0148b79e,69f51418f1bdf3c3aa7f21ac,69f5141a4b8802e2b0a4e9ca",
+            "pos": "top"
+          },
+          "_trello_target": {
+            "tier": "cold",
+            "board_id": "69f4dfe6b0ab38e8b9b9903d",
+            "list_id": "69f4e03f38ac39b5376ccea0",
+            "labels_applied": 4
+          },
+          "_trello_card": {
+            "id": "69f7abca806bee1afb76e198",
+            "url": "https://trello.com/c/DEOtuGWB/2-358-greenleaf-agriculture-co-mark-chen",
+            "shortUrl": "https://trello.com/c/DEOtuGWB",
+            "idList": "69f4e03f38ac39b5376ccea0",
+            "idBoard": "69f4dfe6b0ab38e8b9b9903d"
+          },
+          "_assignment": {
+            "rep_email": "fallback@pemo.io",
+            "rep_name": "Global Pool",
+            "rep_slack": "U_FALLBACK_MOCK",
+            "bucket_reason": "bucket=CA/en, no specific rep — falling back to global pool",
+            "assigned_at": "2026-05-03T20:10:50.752Z"
+          }
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Sub-flow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Disqualified?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Disqualified?": {
+      "main": [
+        [
+          {
+            "node": "Slack: Disqualified Notice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI: Educational Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack: Disqualified Notice": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: Mark Disqualified",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI: Educational Email": {
+      "main": [
+        [
+          {
+            "node": "Parse Cold Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail: Send Cold Email": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: Log Cold Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot: Log Cold Email": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: Mark Cold Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot: Mark Cold Sent": {
+      "main": [
+        [
+          {
+            "node": "Slack: Cold Logged",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Cold Email": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Send Cold Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "48816345-58c1-4597-9706-45676de553d4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0487ed9ccc17a9d076650450c968108f2992031fced90b237cc1c26ded8d9e33"
+  },
+  "id": "fIfDdpRghzdnqpEs",
+  "tags": []
+}

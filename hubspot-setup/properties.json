@@ -1,0 +1,322 @@
+{
+  "_comment": "HubSpot custom property definitions for the Pemo GTM lead scoring system. Run setup.js to create these in your HubSpot portal.",
+  "contact_properties": {
+    "groupName": "pemo_gtm",
+    "groupLabel": "Pemo GTM",
+    "properties": [
+      {
+        "name": "pemo_lead_score",
+        "label": "Pemo Lead Score",
+        "type": "number",
+        "fieldType": "number",
+        "description": "Numeric lead score 0-100 from the Pemo scoring engine."
+      },
+      {
+        "name": "pemo_lead_tier",
+        "label": "Pemo Lead Tier",
+        "type": "enumeration",
+        "fieldType": "select",
+        "description": "Hot (80+), Warm (50-79), Cold (<50). Disqualified leads forced to Cold.",
+        "options": [
+          { "label": "Hot", "value": "hot", "displayOrder": 0 },
+          { "label": "Warm", "value": "warm", "displayOrder": 1 },
+          { "label": "Cold", "value": "cold", "displayOrder": 2 }
+        ]
+      },
+      {
+        "name": "pemo_qualification_summary",
+        "label": "AI Qualification Summary",
+        "type": "string",
+        "fieldType": "textarea",
+        "description": "LLM-generated 2-3 sentence summary explaining the score and rep next-step."
+      },
+      {
+        "name": "pemo_score_rationale",
+        "label": "Score Rationale (deterministic)",
+        "type": "string",
+        "fieldType": "textarea",
+        "description": "Component-by-component breakdown of how the score was computed."
+      },
+      {
+        "name": "pemo_firmographic_score",
+        "label": "Firmographic Subscore",
+        "type": "number",
+        "fieldType": "number",
+        "description": "Weighted firmographic component (max 35)."
+      },
+      {
+        "name": "pemo_intent_score",
+        "label": "Intent Subscore",
+        "type": "number",
+        "fieldType": "number",
+        "description": "Weighted intent component (max 30)."
+      },
+      {
+        "name": "pemo_source_score",
+        "label": "Source Quality Subscore",
+        "type": "number",
+        "fieldType": "number",
+        "description": "Weighted source-quality component (max 20)."
+      },
+      {
+        "name": "pemo_engagement_score",
+        "label": "Engagement Subscore",
+        "type": "number",
+        "fieldType": "number",
+        "description": "Weighted engagement-recency component (max 15)."
+      },
+      {
+        "name": "pemo_confidence",
+        "label": "Score Confidence",
+        "type": "number",
+        "fieldType": "number",
+        "description": "Data-completeness confidence (0-1). Below 0.6 flags for human review."
+      },
+      {
+        "name": "pemo_disqualified",
+        "label": "Disqualified",
+        "type": "bool",
+        "fieldType": "booleancheckbox",
+        "description": "True if negative intent signals (unsubscribe, not interested) detected.",
+        "options": [
+          { "label": "Yes", "value": "true", "displayOrder": 0 },
+          { "label": "No", "value": "false", "displayOrder": 1 }
+        ]
+      },
+      {
+        "name": "pemo_score_version",
+        "label": "Score Version",
+        "type": "string",
+        "fieldType": "text",
+        "description": "Version of the scoring algorithm used. Enables forward-compatibility when weights are retuned."
+      },
+      {
+        "name": "pemo_last_scored_at",
+        "label": "Last Scored At",
+        "type": "datetime",
+        "fieldType": "date",
+        "description": "Timestamp of the most recent scoring run."
+      },
+      {
+        "name": "pemo_lead_source_channel",
+        "label": "Lead Source Channel",
+        "type": "enumeration",
+        "fieldType": "select",
+        "description": "Normalized inbound channel for routing & analytics.",
+        "options": [
+          { "label": "Referral", "value": "referral", "displayOrder": 0 },
+          { "label": "Partner", "value": "partner", "displayOrder": 1 },
+          { "label": "Event", "value": "event", "displayOrder": 2 },
+          { "label": "Webinar", "value": "webinar", "displayOrder": 3 },
+          { "label": "Content Download", "value": "content_download", "displayOrder": 4 },
+          { "label": "Organic Search", "value": "organic_search", "displayOrder": 5 },
+          { "label": "Direct", "value": "direct", "displayOrder": 6 },
+          { "label": "Social Organic", "value": "social_organic", "displayOrder": 7 },
+          { "label": "Paid Search", "value": "paid_search", "displayOrder": 8 },
+          { "label": "Paid Social", "value": "paid_social", "displayOrder": 9 },
+          { "label": "Cold Outbound", "value": "cold_outbound", "displayOrder": 10 },
+          { "label": "List Purchase", "value": "list_purchase", "displayOrder": 11 },
+          { "label": "Unknown", "value": "unknown", "displayOrder": 12 }
+        ]
+      },
+      {
+        "name": "pemo_country_tier",
+        "label": "Country ICP Tier",
+        "type": "enumeration",
+        "fieldType": "select",
+        "description": "ICP region classification for routing.",
+        "options": [
+          { "label": "Tier 1 (UAE / KSA)", "value": "tier_1", "displayOrder": 0 },
+          { "label": "Tier 2 (Egypt)", "value": "tier_2", "displayOrder": 1 },
+          { "label": "Tier 3 (Other GCC + Jordan)", "value": "tier_3", "displayOrder": 2 },
+          { "label": "Out of Market", "value": "out_of_market", "displayOrder": 3 }
+        ]
+      },
+      {
+        "name": "pemo_language",
+        "label": "Lead Language",
+        "type": "enumeration",
+        "fieldType": "select",
+        "description": "Detected language for outreach personalization & rep routing.",
+        "options": [
+          { "label": "English", "value": "en", "displayOrder": 0 },
+          { "label": "Arabic", "value": "ar", "displayOrder": 1 }
+        ]
+      },
+      {
+        "name": "pemo_raw_message",
+        "label": "Original Message",
+        "type": "string",
+        "fieldType": "textarea",
+        "description": "Untransformed message body from the inbound form/channel."
+      },
+      {
+        "name": "pemo_trello_card_url",
+        "label": "Trello Card URL",
+        "type": "string",
+        "fieldType": "text",
+        "description": "Link to the Trello card on the tier board for visual ops."
+      },
+      {
+        "name": "pemo_assigned_rep_email",
+        "label": "Assigned Rep (Email)",
+        "type": "string",
+        "fieldType": "text",
+        "description": "Email of the sales rep assigned via round-robin within geo/language bucket."
+      },
+      {
+        "name": "pemo_form_intent",
+        "label": "Form Intent",
+        "type": "string",
+        "fieldType": "text",
+        "description": "Explicit intent declared on the inbound form (demo, pricing, info, support)."
+      },
+      {
+        "name": "pemo_inbound_source_shape",
+        "label": "Inbound Payload Shape",
+        "type": "string",
+        "fieldType": "text",
+        "description": "Detected inbound payload shape (website_form, partner_referral, event, generic). Audit field for the normalization layer."
+      },
+      {
+        "name": "pemo_request_id",
+        "label": "Ingestion Request ID",
+        "type": "string",
+        "fieldType": "text",
+        "description": "Unique ID of the intake request. Use to trace a lead back through n8n logs."
+      },
+      {
+        "name": "pemo_visit_count",
+        "label": "Visit Count",
+        "type": "number",
+        "fieldType": "number",
+        "description": "Number of website visits prior to lead submission (engagement signal)."
+      },
+      {
+        "name": "pemo_existing_customer",
+        "label": "Existing Pemo Customer (Contact)",
+        "type": "bool",
+        "fieldType": "booleancheckbox",
+        "description": "Contact-level dedup flag. True if matched to an existing customer at intake.",
+        "options": [
+          { "label": "Yes", "value": "true", "displayOrder": 0 },
+          { "label": "No",  "value": "false", "displayOrder": 1 }
+        ]
+      },
+      {
+        "name": "pemo_company_size_band",
+        "label": "Company Size Band (Contact)",
+        "type": "enumeration",
+        "fieldType": "select",
+        "description": "ICP size band classification (denormalized at Contact level for routing).",
+        "options": [
+          { "label": "Micro (<10)",      "value": "micro",  "displayOrder": 0 },
+          { "label": "Small (10-19)",    "value": "small",  "displayOrder": 1 },
+          { "label": "Ideal (20-200)",   "value": "ideal",  "displayOrder": 2 },
+          { "label": "Upper (201-500)",  "value": "upper",  "displayOrder": 3 },
+          { "label": "Marginal Large (501-1000)", "value": "marginal_large", "displayOrder": 4 },
+          { "label": "Out of Fit (>1000)", "value": "out_of_fit_large", "displayOrder": 5 },
+          { "label": "Unknown",          "value": "unknown", "displayOrder": 6 }
+        ]
+      },
+      {
+        "name": "pemo_tech_stack_signals",
+        "label": "Tech Stack Signals",
+        "type": "string",
+        "fieldType": "textarea",
+        "description": "Comma-separated list of accounting/payment tools detected via enrichment."
+      },
+      {
+        "name": "pemo_replied",
+        "label": "Lead Replied",
+        "type": "bool",
+        "fieldType": "booleancheckbox",
+        "description": "True once a reply (from any channel) is detected by WF-REPLY. Halts active sequences.",
+        "options": [
+          { "label": "Yes", "value": "true",  "displayOrder": 0 },
+          { "label": "No",  "value": "false", "displayOrder": 1 }
+        ]
+      },
+      {
+        "name": "pemo_replied_at",
+        "label": "Replied At",
+        "type": "datetime",
+        "fieldType": "date",
+        "description": "Timestamp of the first detected reply. Set by WF-REPLY."
+      },
+      {
+        "name": "pemo_sequence_step",
+        "label": "Outreach Sequence Step",
+        "type": "string",
+        "fieldType": "text",
+        "description": "Last step sent (warm_day_0, warm_day_3, warm_day_7, cold_day_0, hot_initial). Used by WF-MONITORING to spot stuck leads."
+      }
+    ]
+  },
+  "company_properties": {
+    "groupName": "pemo_gtm",
+    "groupLabel": "Pemo GTM",
+    "properties": [
+      {
+        "name": "pemo_company_size_band",
+        "label": "Company Size Band",
+        "type": "enumeration",
+        "fieldType": "select",
+        "description": "ICP size band classification.",
+        "options": [
+          { "label": "Micro (<10)", "value": "micro", "displayOrder": 0 },
+          { "label": "Small (10-19)", "value": "small", "displayOrder": 1 },
+          { "label": "Ideal (20-200)", "value": "ideal", "displayOrder": 2 },
+          { "label": "Mid (201-500)", "value": "mid", "displayOrder": 3 },
+          { "label": "Large (501-1000)", "value": "large", "displayOrder": 4 },
+          { "label": "Enterprise (>1000)", "value": "enterprise", "displayOrder": 5 },
+          { "label": "Unknown", "value": "unknown", "displayOrder": 6 }
+        ]
+      },
+      {
+        "name": "pemo_industry_fit",
+        "label": "Industry Fit",
+        "type": "enumeration",
+        "fieldType": "select",
+        "description": "ICP industry classification.",
+        "options": [
+          { "label": "High Fit", "value": "high", "displayOrder": 0 },
+          { "label": "Medium Fit", "value": "medium", "displayOrder": 1 },
+          { "label": "Low Fit", "value": "low", "displayOrder": 2 },
+          { "label": "Unclassified", "value": "unclassified", "displayOrder": 3 }
+        ]
+      },
+      {
+        "name": "pemo_tech_stack",
+        "label": "Detected Tech Stack",
+        "type": "string",
+        "fieldType": "textarea",
+        "description": "Accounting/payment tools detected via enrichment (comma-separated)."
+      },
+      {
+        "name": "pemo_tech_stack_signal",
+        "label": "Tech Stack Signal",
+        "type": "enumeration",
+        "fieldType": "select",
+        "description": "What the detected stack signals about buying readiness.",
+        "options": [
+          { "label": "Competitor (switch opportunity)", "value": "competitor", "displayOrder": 0 },
+          { "label": "Modern accounting (integration-ready)", "value": "modern", "displayOrder": 1 },
+          { "label": "Manual / spreadsheet (high pain)", "value": "manual", "displayOrder": 2 },
+          { "label": "None detected", "value": "none", "displayOrder": 3 }
+        ]
+      },
+      {
+        "name": "pemo_existing_customer",
+        "label": "Existing Pemo Customer",
+        "type": "bool",
+        "fieldType": "booleancheckbox",
+        "description": "True if matched to an existing customer record (dedup signal).",
+        "options": [
+          { "label": "Yes", "value": "true", "displayOrder": 0 },
+          { "label": "No", "value": "false", "displayOrder": 1 }
+        ]
+      }
+    ]
+  }
+}

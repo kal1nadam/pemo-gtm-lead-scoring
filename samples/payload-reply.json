@@ -1,0 +1,7 @@
+{
+  "_comment": "Sample inbound reply payload. POST this to /webhook/lead-reply to simulate a lead replying. WF-REPLY sets pemo_replied=true on the contact and notifies the rep on Slack.",
+  "email": "ahmed@falconlogistics.ae",
+  "replied_at": "2026-05-03T14:30:00Z",
+  "channel": "email",
+  "excerpt": "Thanks for reaching out — yes, this looks interesting. Can we schedule a call next Tuesday afternoon? Also, do you support multi-currency wallets in EUR?"
+}

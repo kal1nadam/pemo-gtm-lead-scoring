@@ -1,0 +1,1192 @@
+{
+  "name": "Pemo: Warm Sequence (Day 0/3/7)",
+  "nodes": [
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "2e0c62d5-1bac-48f8-b69a-d29b9575b75e",
+      "name": "Sub-flow Trigger"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "{\n  \"mode\": \"demo\",\n  \"wait_3d_seconds\": 60,\n  \"wait_4d_seconds\": 60,\n  \"_note\": \"demo: 60s = 1 min for testable demo. production: set to 259200 (3d) and 345600 (4d).\"\n}",
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        208,
+        0
+      ],
+      "id": "82be4214-5f19-4a51-8769-2cff52c4dc9d",
+      "name": "Sequence Config"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an inside sales rep at Pemo, a B2B fintech serving SMEs in MENA (UAE, Saudi Arabia, Egypt).\n\nThis is the FIRST email in a warm-lead nurture sequence (Day 0). The lead expressed interest but did not request an urgent demo — they're exploring.\n\nTone: warm, helpful, NOT pushy. Position Pemo as a useful resource, not a hard sell.\n\nCountry-specific value props (use ONE that fits their country):\n- UAE: real-time spend visibility for fast-scaling SMEs; multi-currency cards; eliminate shared-card chaos\n- Saudi Arabia: ZATCA-ready VAT export; Arabic-first UI; instant SAR settlement via neoleap (Alrajhi)\n- Egypt: cost optimization under EGP volatility; multi-bank consolidation; simplified expense reporting\n- Other / fallback: real-time spend visibility; AI-powered receipt automation; team spending controls\n\nEmail rules:\n- 5-7 sentences MAX\n- Reference at least one specific detail from their profile or message\n- Soft CTA: \"happy to chat when useful\" — NOT \"book a demo now\"\n- Mention you'll share more useful info in coming days\n- Sign off with the rep's name\n\nOutput: JSON {subject, body}. No markdown, no preamble, no code fences.\nIf language is \"ar\", write the entire email in Arabic. Otherwise English. Never mix."
+            },
+            {
+              "content": "=Lead profile:\n- Company: {{ $json.company_name }} ({{ $json.country }}, {{ $json.industry }}, ~{{ $json.company_size }} employees)\n- Contact: {{ $json.contact_name }} ({{ $json.email }})\n- Tech stack: {{ ($json.tech_stack || []).join(', ') }}\n- Inbound message: \"{{ $json.raw_message }}\"\n- Language: {{ $json.language }}\n- Rep: {{ $json._assignment.rep_name }} ({{ $json._assignment.rep_email }})\n- AI qualification summary: {{ $json.qualification_summary }}\n\nGenerate the Day 0 nurture email now. Output JSON only."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "maxTokens": 500,
+          "temperature": 0.5
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        416,
+        0
+      ],
+      "id": "de534f5d-053e-4ee6-a47b-64f763e55147",
+      "name": "AI: Day 0 Email",
+      "credentials": {
+        "openAiApi": {
+          "id": "YQSOdRshnmOCa4eW",
+          "name": "Pemo OpenAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Parse the LLM email JSON. Same defensive shape-walking as Hot outreach.\n * Carries the lead context forward by referencing the Sequence Config node.\n */\nconst lead = $('Sequence Config').item.json;\nconst ai = $input.item.json;\n\nfunction extractContent(o) {\n  if (Array.isArray(o.output) && o.output[0]?.content) {\n    const block = o.output[0].content.find((c) => c.type === \"output_text\" || typeof c.text === \"string\");\n    if (block?.text) return block.text;\n  }\n  if (typeof o.text === \"string\") return o.text;\n  if (o.message?.content) return o.message.content;\n  if (o.choices?.[0]?.message?.content) return o.choices[0].message.content;\n  return \"\";\n}\n\nlet raw = extractContent(ai).trim().replace(/^```(?:json)?\\s*/i, \"\").replace(/```\\s*$/, \"\").trim();\nlet parsed;\ntry { parsed = JSON.parse(raw); }\ncatch (e) { parsed = { subject: \"Following up from Pemo\", body: raw }; }\n\nreturn {\n  json: {\n    ...lead,\n    _outreach: {\n      channel: \"warm\",\n      step: \"day_0\",\n      subject: parsed.subject || \"Following up from Pemo\",\n      body: parsed.body || \"\",\n      to: lead.email,\n      generated_at: new Date().toISOString()\n    }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        752,
+        0
+      ],
+      "id": "3c4fc539-064b-40a9-b78a-3578f2b87dc7",
+      "name": "Parse Day 0"
+    },
+    {
+      "parameters": {
+        "sendTo": "kalinaadam75@seznam.cz",
+        "subject": "={{ $json._outreach.subject }}",
+        "emailType": "text",
+        "message": "={{ $json._outreach.body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        960,
+        0
+      ],
+      "id": "6e93b1d9-e342-4185-95b9-46edef8d514d",
+      "name": "Gmail: Send Day 0",
+      "webhookId": "8548309d-1fb8-4e49-b0e9-6c1ade16e282",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "yblhyc9sgHFejXCh",
+          "name": "Pemo Gmail"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/emails",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ (() => { const l = $('Parse Day 0').item.json; return JSON.stringify({ properties: { hs_timestamp: $now.toMillis(), hs_email_direction: \"EMAIL\", hs_email_status: \"SENT\", hs_email_subject: l._outreach.subject, hs_email_text: l._outreach.body, hs_email_headers: JSON.stringify({ from: { email: l._assignment.rep_email, firstName: l._assignment.rep_name }, to: [{ email: l.email, firstName: l.contact_name }] }) }, associations: [ { to: { id: l._hubspot.contact_id }, types: [{ associationCategory: \"HUBSPOT_DEFINED\", associationTypeId: 198 }] } ] }); })() }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1168,
+        0
+      ],
+      "id": "1bcf4f3f-b97f-4e9f-983e-a30f2f3d59f5",
+      "name": "HubSpot: Log Day 0",
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "KW7zeDVcuBn5tSOO",
+          "name": "Pemo Hubspot"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ `https://api.hubapi.com/crm/v3/objects/contacts/${$('Parse Day 0').item.json._hubspot.contact_id}` }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"properties\": {\n    \"pemo_sequence_step\": \"warm_day_0_sent\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1376,
+        0
+      ],
+      "id": "90772007-6bdb-4662-83da-8bcda587ef25",
+      "name": "HubSpot: Mark Day 0 Sent",
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "KW7zeDVcuBn5tSOO",
+          "name": "Pemo Hubspot"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "amount": "={{ $('Sequence Config').item.json.wait_3d_seconds }}"
+      },
+      "id": "c980ce4f-9490-4086-b808-d41cf60aa550",
+      "name": "Wait 3 Days",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1600,
+        0
+      ],
+      "webhookId": "wait-3d"
+    },
+    {
+      "parameters": {
+        "url": "={{ `https://api.hubapi.com/crm/v3/objects/contacts/${$('Parse Day 0').item.json._hubspot.contact_id}?properties=pemo_replied,pemo_replied_at,pemo_sequence_step` }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "options": {}
+      },
+      "id": "71473e3f-4945-426e-a7c0-22c8f6a10f28",
+      "name": "Reply Check (after 3d)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1824,
+        0
+      ],
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "KW7zeDVcuBn5tSOO",
+          "name": "Pemo Hubspot"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "c1",
+              "leftValue": "={{ $json.properties.pemo_replied }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "efc11589-9e64-4cde-94cb-bb91f9e32944",
+      "name": "Replied After Day 0?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2048,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#leads-alerts",
+          "mode": "name"
+        },
+        "text": "={{ (() => { const l = $('Parse Day 0').item.json; return `✅ *Reply detected during warm sequence (after Day 0)*\\n\\n*${l.company_name}* — ${l.contact_name}\\n_Assigned to:_ ${l._assignment.rep_name}\\n\\nSequence halted. Check timeline:\\n🔗 <${l._hubspot.contact_url}|HubSpot> · <${l._trello_card.url}|Trello>`; })() }}",
+        "otherOptions": {}
+      },
+      "id": "ed6d43dc-aaf8-41d3-9362-dd1b1c00e23b",
+      "name": "Slack: Stop on Reply (D0→D3)",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        2256,
+        -176
+      ],
+      "webhookId": "4ffbe4d7-9ff5-4fe4-a372-7e78f501aff3",
+      "credentials": {
+        "slackApi": {
+          "id": "ppXNa85asyVoCHYl",
+          "name": "Pemo Slack Bot"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are an inside sales rep at Pemo (B2B fintech, MENA SMEs).\n\nThis is the SECOND email in a warm-lead sequence (Day 3 — three days after the first soft outreach). The lead hasn't replied yet but didn't unsubscribe either.\n\nTone: helpful, share value, NO hard sell. Reference industry-specific use case.\n\nCountry-specific value props (use ONE):\n- UAE: real-time spend visibility, multi-currency cards, eliminate shared-card chaos\n- Saudi Arabia: ZATCA-ready VAT, Arabic-first UI, neoleap (Alrajhi) instant SAR settlement\n- Egypt: cost optimization under EGP volatility, multi-bank consolidation\n- Other: real-time spend visibility, AI receipt automation, team controls\n\nEmail rules:\n- 5-7 sentences MAX\n- Reference an industry-specific use case (their industry from profile)\n- Soft CTA: offer a 15-min discovery call OR send a one-pager\n- Acknowledge timing: \"I sent a quick intro a few days back\"\n- Sign off with the rep's name\n\nOutput: JSON {subject, body}. No markdown, no preamble.\nIf language is \"ar\", entire email in Arabic. Otherwise English. No mixing.",
+              "role": "system"
+            },
+            {
+              "content": "=Lead profile:\n- Company: {{ $('Sequence Config').item.json.company_name }} ({{ $('Sequence Config').item.json.country }}, {{ $('Sequence Config').item.json.industry }}, ~{{ $('Sequence Config').item.json.company_size }} employees)\n- Contact: {{ $('Sequence Config').item.json.contact_name }} ({{ $('Sequence Config').item.json.email }})\n- Tech stack: {{ ($('Sequence Config').item.json.tech_stack || []).join(', ') }}\n- Inbound message: \"{{ $('Sequence Config').item.json.raw_message }}\"\n- Language: {{ $('Sequence Config').item.json.language }}\n- Rep: {{ $('Sequence Config').item.json._assignment.rep_name }} ({{ $('Sequence Config').item.json._assignment.rep_email }})\n\nGenerate the Day 3 follow-up email now. Output JSON only."
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 500,
+          "temperature": 0.5
+        }
+      },
+      "id": "e58f93eb-9c99-464f-bc0c-fa6ffc4b4dd3",
+      "name": "AI: Day 3 Email",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.7,
+      "position": [
+        2304,
+        128
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "YQSOdRshnmOCa4eW",
+          "name": "Pemo OpenAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Sequence Config').item.json;\nconst ai = $input.item.json;\n\nfunction extractContent(o) {\n  if (Array.isArray(o.output) && o.output[0]?.content) {\n    const block = o.output[0].content.find((c) => c.type === 'output_text' || typeof c.text === 'string');\n    if (block?.text) return block.text;\n  }\n  if (typeof o.text === 'string') return o.text;\n  if (o.message?.content) return o.message.content;\n  if (o.choices?.[0]?.message?.content) return o.choices[0].message.content;\n  return '';\n}\n\nlet raw = extractContent(ai).trim().replace(/^```(?:json)?\\s*/i, '').replace(/```\\s*$/, '').trim();\nlet parsed;\ntry { parsed = JSON.parse(raw); } catch (e) { parsed = { subject: 'Following up from Pemo', body: raw }; }\n\nreturn {\n  json: {\n    ...lead,\n    _outreach: {\n      channel: 'warm',\n      step: 'day_3',\n      subject: parsed.subject || 'Quick follow-up from Pemo',\n      body: parsed.body || '',\n      to: lead.email,\n      generated_at: new Date().toISOString()\n    }\n  }\n};"
+      },
+      "id": "67b42c82-9edc-4069-9cad-1fd69637d3f3",
+      "name": "Parse Day 3",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2592,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "=kalinaadam75@seznam.cz",
+        "subject": "={{ $json._outreach.subject }}",
+        "emailType": "text",
+        "message": "={{ $json._outreach.body }}",
+        "options": {}
+      },
+      "id": "a10abeec-414f-4bf4-a558-e1c1d9cc13a8",
+      "name": "Gmail: Send Day 3",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        2784,
+        128
+      ],
+      "webhookId": "84593d76-f990-4e67-b883-1bddd8b0b27c",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "yblhyc9sgHFejXCh",
+          "name": "Pemo Gmail"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/emails",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ (() => { const l = $('Parse Day 3').item.json; return JSON.stringify({ properties: { hs_timestamp: $now.toMillis(), hs_email_direction: 'EMAIL', hs_email_status: 'SENT', hs_email_subject: l._outreach.subject, hs_email_text: l._outreach.body, hs_email_headers: JSON.stringify({ from: { email: l._assignment.rep_email, firstName: l._assignment.rep_name }, to: [{ email: l.email, firstName: l.contact_name }] }) }, associations: [ { to: { id: l._hubspot.contact_id }, types: [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId: 198 }] } ] }); })() }}",
+        "options": {}
+      },
+      "id": "f77f8c25-27c1-4c3a-8914-ac326bf6c228",
+      "name": "HubSpot: Log Day 3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2976,
+        128
+      ],
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "KW7zeDVcuBn5tSOO",
+          "name": "Pemo Hubspot"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ `https://api.hubapi.com/crm/v3/objects/contacts/${$('Parse Day 3').item.json._hubspot.contact_id}` }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"properties\": {\n    \"pemo_sequence_step\": \"warm_day_3_sent\"\n  }\n}",
+        "options": {}
+      },
+      "id": "5fdfd3a9-d57b-481f-94fa-5021680d9302",
+      "name": "HubSpot: Mark Day 3 Sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3200,
+        128
+      ],
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "KW7zeDVcuBn5tSOO",
+          "name": "Pemo Hubspot"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "amount": "={{ $('Sequence Config').item.json.wait_4d_seconds }}"
+      },
+      "id": "986504e9-b209-45a3-b600-6a8b29c45c9e",
+      "name": "Wait 4 Days",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        3424,
+        128
+      ],
+      "webhookId": "wait-4d"
+    },
+    {
+      "parameters": {
+        "url": "={{ `https://api.hubapi.com/crm/v3/objects/contacts/${$('Parse Day 3').item.json._hubspot.contact_id}?properties=pemo_replied,pemo_replied_at,pemo_sequence_step` }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "options": {}
+      },
+      "id": "671348e0-25bf-4bc1-b6d9-63b8f3d87e67",
+      "name": "Reply Check (after 7d)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3632,
+        128
+      ],
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "KW7zeDVcuBn5tSOO",
+          "name": "Pemo Hubspot"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "c2",
+              "leftValue": "={{ $json.properties.pemo_replied }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "f026b36c-367c-4f45-9dad-2f6346f6ec56",
+      "name": "Replied After Day 3?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3856,
+        128
+      ]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#leads-alerts",
+          "mode": "name"
+        },
+        "text": "={{ (() => { const l = $('Parse Day 3').item.json; return `✅ *Reply detected during warm sequence (after Day 3)*\\n\\n*${l.company_name}* — ${l.contact_name}\\n_Assigned to:_ ${l._assignment.rep_name}\\n\\nSequence halted. Check timeline:\\n🔗 <${l._hubspot.contact_url}|HubSpot> · <${l._trello_card.url}|Trello>`; })() }}",
+        "otherOptions": {}
+      },
+      "id": "92bf427c-19cd-4668-a974-8e2a5a750e87",
+      "name": "Slack: Stop on Reply (D3→D7)",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        4064,
+        16
+      ],
+      "webhookId": "ed8712cc-fc4a-4b00-bd7d-c9c9c1b1e45c",
+      "credentials": {
+        "slackApi": {
+          "id": "ppXNa85asyVoCHYl",
+          "name": "Pemo Slack Bot"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list"
+        },
+        "messages": {
+          "values": [
+            {
+              "content": "You are an inside sales rep at Pemo (B2B fintech, MENA SMEs).\n\nThis is the FINAL email (Day 7) in a warm-lead nurture sequence. The lead hasn't responded to two prior emails.\n\nTone: respectful, gentle, give them an easy out. NOT desperate, NOT pushy.\n\nEmail rules:\n- 4-6 sentences MAX\n- Acknowledge silence: \"I'll stop reaching out after this\"\n- Offer simple ways to stay in touch (newsletter, content) IF they want\n- One last short value-prop reminder (country-relevant)\n- Wish them well, sign off with the rep's name\n\nOutput: JSON {subject, body}. No markdown, no preamble.\nIf language is \"ar\", entire email in Arabic. Otherwise English. No mixing.",
+              "role": "system"
+            },
+            {
+              "content": "=Lead profile:\n- Company: {{ $('Sequence Config').item.json.company_name }} ({{ $('Sequence Config').item.json.country }}, {{ $('Sequence Config').item.json.industry }})\n- Contact: {{ $('Sequence Config').item.json.contact_name }} ({{ $('Sequence Config').item.json.email }})\n- Language: {{ $('Sequence Config').item.json.language }}\n- Rep: {{ $('Sequence Config').item.json._assignment.rep_name }}\n\nGenerate the Day 7 final-touch email now. Output JSON only."
+            }
+          ]
+        },
+        "options": {
+          "maxTokens": 400,
+          "temperature": 0.5
+        }
+      },
+      "id": "73a193e0-5e4b-43f8-b1ff-0deea8327dca",
+      "name": "AI: Day 7 Email",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 1.7,
+      "position": [
+        4128,
+        272
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "YQSOdRshnmOCa4eW",
+          "name": "Pemo OpenAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const lead = $('Sequence Config').item.json;\nconst ai = $input.item.json;\n\nfunction extractContent(o) {\n  if (Array.isArray(o.output) && o.output[0]?.content) {\n    const block = o.output[0].content.find((c) => c.type === 'output_text' || typeof c.text === 'string');\n    if (block?.text) return block.text;\n  }\n  if (typeof o.text === 'string') return o.text;\n  if (o.message?.content) return o.message.content;\n  if (o.choices?.[0]?.message?.content) return o.choices[0].message.content;\n  return '';\n}\n\nlet raw = extractContent(ai).trim().replace(/^```(?:json)?\\s*/i, '').replace(/```\\s*$/, '').trim();\nlet parsed;\ntry { parsed = JSON.parse(raw); } catch (e) { parsed = { subject: 'One last note from Pemo', body: raw }; }\n\nreturn {\n  json: {\n    ...lead,\n    _outreach: {\n      channel: 'warm',\n      step: 'day_7',\n      subject: parsed.subject || 'One last note from Pemo',\n      body: parsed.body || '',\n      to: lead.email,\n      generated_at: new Date().toISOString()\n    }\n  }\n};"
+      },
+      "id": "13bc654b-6ff9-48bd-bc96-5ed2afc1ba99",
+      "name": "Parse Day 7",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4416,
+        272
+      ]
+    },
+    {
+      "parameters": {
+        "sendTo": "=kalinaadam75@seznam.cz",
+        "subject": "={{ $json._outreach.subject }}",
+        "emailType": "text",
+        "message": "={{ $json._outreach.body }}",
+        "options": {}
+      },
+      "id": "24858643-0520-4969-b5fa-72a2d6da8233",
+      "name": "Gmail: Send Day 7",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        4624,
+        272
+      ],
+      "webhookId": "39bd1da8-ef5d-49d1-9ece-d39d289fecee",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "yblhyc9sgHFejXCh",
+          "name": "Pemo Gmail"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/emails",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ (() => { const l = $('Parse Day 7').item.json; return JSON.stringify({ properties: { hs_timestamp: $now.toMillis(), hs_email_direction: 'EMAIL', hs_email_status: 'SENT', hs_email_subject: l._outreach.subject, hs_email_text: l._outreach.body, hs_email_headers: JSON.stringify({ from: { email: l._assignment.rep_email, firstName: l._assignment.rep_name }, to: [{ email: l.email, firstName: l.contact_name }] }) }, associations: [ { to: { id: l._hubspot.contact_id }, types: [{ associationCategory: 'HUBSPOT_DEFINED', associationTypeId: 198 }] } ] }); })() }}",
+        "options": {}
+      },
+      "id": "80f67bbd-7803-420d-8027-3508895912b4",
+      "name": "HubSpot: Log Day 7",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4848,
+        272
+      ],
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "KW7zeDVcuBn5tSOO",
+          "name": "Pemo Hubspot"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ `https://api.hubapi.com/crm/v3/objects/contacts/${$('Parse Day 7').item.json._hubspot.contact_id}` }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"properties\": {\n    \"pemo_sequence_step\": \"warm_completed_no_reply\"\n  }\n}",
+        "options": {}
+      },
+      "id": "e938775a-7d1e-48d1-8d97-881c61755be5",
+      "name": "HubSpot: Mark Sequence Completed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5072,
+        272
+      ],
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "KW7zeDVcuBn5tSOO",
+          "name": "Pemo Hubspot"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#leads-digest",
+          "mode": "name"
+        },
+        "text": "={{ (() => { const l = $('Parse Day 7').item.json; return `📭 *Warm sequence completed without reply*\\n\\n*${l.company_name}* — ${l.contact_name} (${l.country})\\n_Assigned to:_ ${l._assignment.rep_name}\\n\\nAll 3 emails sent (Day 0/3/7). No reply detected. Lead now in HubSpot under \\`warm_completed_no_reply\\`.\\n\\n🔗 <${l._hubspot.contact_url}|HubSpot> · <${l._trello_card.url}|Trello>`; })() }}",
+        "otherOptions": {}
+      },
+      "id": "bc4fb36a-8165-4c5a-9997-145ebeff9137",
+      "name": "Slack: Sequence Done",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        5296,
+        272
+      ],
+      "webhookId": "d43d7fdf-68ea-46f4-8d86-d061f3f689ba",
+      "credentials": {
+        "slackApi": {
+          "id": "ppXNa85asyVoCHYl",
+          "name": "Pemo Slack Bot"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "content": "## ☀️ Warm Sequence (Day 0 / 3 / 7)\n\nSub-workflow triggered by **MAIN** when a lead scores 50–79.\n\n**Pattern**: send → wait → reply check → branch.\n\n**Reply check** queries HubSpot for `pemo_replied`. If true at any\ncheckpoint, the sequence stops and Slack alerts the rep — no more\nemails sent.\n\n**Wait durations** are externalized in `Sequence Config` (top of\nworkflow). Demo runs at 60s. Production: flip to 259200 (3d) and\n345600 (4d) - single-line config change, no logic refactor.\n\n**LLM prompts differ per step**: Day 0 = warm intro, Day 3 = value\nfollow-up with industry use case, Day 7 = gentle final-touch with\neasy out. Country-specific value props baked into each system prompt.\n\nEvery sent email lands in the HubSpot timeline as an Email\nengagement, and `pemo_sequence_step` tracks the last step sent -\nused by WF-MONITORING to spot stuck sequences.",
+        "height": 364,
+        "width": 576
+      },
+      "id": "d0671ce0-b1de-44b2-8d70-b4c092947efc",
+      "name": "Sticky: Warm Sequence overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -16,
+        -464
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Day 0 (Initial Soft Touch)\n\nFirst email after lead lands in warm tier. Tone is helpful, not salesy.\nThey're exploring, not buying.\n\nLLM personalizes around country-specific value props (UAE / KSA / EGY)\nand references a concrete detail from the inbound message. Soft CTA:\n\"happy to chat when useful\". No demo pressure.\n\nLogged as Email engagement in HubSpot, sequence step set to\n`warm_day_0_sent`. Then we wait.",
+        "height": 208,
+        "width": 1728
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        416,
+        208
+      ],
+      "id": "66f633c3-bfa9-41e6-b377-dc7fcd0912c0",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## Day 3 (Value Follow-Up)\n\nAfter 3 days of silence we check HubSpot for `pemo_replied`. If true,\nSlack alerts the rep and the sequence halts. If false, second email\ngoes out.\n\nThis one is more substantive: industry-specific use case from the\nlead's profile, and a clearer CTA (15-min discovery call or a\none-pager). Acknowledges the timing (\"I sent a quick intro a few days\nback\") so it doesn't read as a fresh cold email.",
+        "height": 208,
+        "width": 1648
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2304,
+        368
+      ],
+      "id": "4195807b-3f05-4126-a78c-c7966abe132f",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "content": "## Day 7 (Gentle Close-Loop)\n\nLast reply check. If still silent, one final email with an easy out:\n\"I'll stop reaching out, but here's how to stay in touch if useful\".\nRespectful exit, not a desperate last shot.\n\nSequence step is set to `warm_completed_no_reply` and a digest note is\nposted to #leads-digest so the rep knows the lead exited the sequence\ncleanly. WF-MONITORING uses this state to surface stale leads later.",
+        "height": 192,
+        "width": 1264
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4128,
+        464
+      ],
+      "id": "063027cf-a025-48f2-88b9-695e26c7e763",
+      "name": "Sticky Note2"
+    }
+  ],
+  "pinData": {
+    "Sub-flow Trigger": [
+      {
+        "json": {
+          "company_name": "Al-Najm Trading Co",
+          "contact_name": "Khalid Al-Otaibi",
+          "email": "khalid@alnajm-trading.sa",
+          "email_domain": "alnajm-trading.sa",
+          "phone": "+966501234567",
+          "country": "SA",
+          "company_size": "15",
+          "source": "partner",
+          "raw_message": "تم تحويلي إليكم من شريككم. نبحث عن حل لإدارة المصاريف لفريقنا الصغير.",
+          "language": "ar",
+          "form_intent": "info",
+          "visit_count": 1,
+          "industry": "retail",
+          "website": "https://alnajm-trading.sa",
+          "tech_stack": [
+            "excel"
+          ],
+          "company_name_native": "شركة النجم التجارية",
+          "partner_name": "GCC Fintech Partners",
+          "partner_id": "partner_gfp_001",
+          "event_name": null,
+          "submitted_at": "2026-05-01T09:00:00Z",
+          "_request_id": "req_moq5lvvb_fxf1xunu",
+          "_source_shape": "partner_referral",
+          "_ingested_at": "2026-05-03T19:18:45.911Z",
+          "_schema_version": "1.0.0",
+          "_validation": {
+            "valid": true,
+            "errors": [],
+            "warnings": [
+              "industry missing — enrichment will need to fill this"
+            ]
+          },
+          "existing_customer": false,
+          "hubspot_contact_id": null,
+          "hubspot_existing_properties": null,
+          "_dedup": {
+            "matched_on": null,
+            "search_total": 0
+          },
+          "_enrichment": {
+            "mode": "mock",
+            "matched": true,
+            "matched_on": "email_domain_exact",
+            "domain": "alnajm-trading.sa",
+            "is_public_email": false,
+            "fields_filled": [
+              "industry",
+              "website",
+              "tech_stack"
+            ]
+          },
+          "scoring": {
+            "total": 63.5,
+            "tier": "warm",
+            "breakdown": {
+              "firmographic": {
+                "raw": 0.91,
+                "weighted": 31.85,
+                "max": 35,
+                "signals": [
+                  "country: tier-1 market (SA) (1)",
+                  "size: 15 employees → acceptable lower (0.7)",
+                  "industry: high-fit industry (retail) (1)"
+                ]
+              },
+              "intent": {
+                "raw": 0.16,
+                "weighted": 4.8,
+                "max": 30,
+                "signals": [
+                  "no intent keywords detected",
+                  "general inquiry form intent: \"info\" (+0.16)"
+                ]
+              },
+              "source_quality": {
+                "raw": 0.95,
+                "weighted": 19,
+                "max": 20,
+                "signals": [
+                  "source \"partner\" weighted at 0.95"
+                ]
+              },
+              "engagement": {
+                "raw": 0.52,
+                "weighted": 7.8,
+                "max": 15,
+                "signals": [
+                  "submitted 2d ago → this_week",
+                  "first visit"
+                ]
+              }
+            },
+            "confidence": {
+              "score": 1,
+              "missing_fields": [],
+              "breakdown": {
+                "required": "3/3",
+                "important": "3/3",
+                "enrichment": "3/3"
+              }
+            },
+            "disqualified": false,
+            "score_version": "1.0.0",
+            "scored_at": "2026-05-03T19:18:46.339Z",
+            "rationale_summary": "WARM (63.449999999999996/100) | strongest: firmographic (31.85/35) | weakest: intent (4.8/30)"
+          },
+          "qualification_summary": "Al-Najm Trading Co is a warm lead from Saudi Arabia in the retail sector, seeking an expense management solution for their small team of 15. The lead comes from a trusted partner source, but lacks strong intent keywords. Recommend nurturing this lead with tailored information before pursuing a demo call.",
+          "_ai": {
+            "model": "gpt-4o-mini",
+            "generated_at": "2026-05-03T19:18:48.526Z"
+          },
+          "_hubspot_payload": {
+            "inputs": [
+              {
+                "idProperty": "email",
+                "id": "khalid@alnajm-trading.sa",
+                "properties": {
+                  "email": "khalid@alnajm-trading.sa",
+                  "firstname": "Khalid",
+                  "lastname": "Al-Otaibi",
+                  "phone": "+966501234567",
+                  "company": "Al-Najm Trading Co",
+                  "country": "SA",
+                  "website": "https://alnajm-trading.sa",
+                  "industry": "retail",
+                  "pemo_lead_score": 63.5,
+                  "pemo_lead_tier": "warm",
+                  "pemo_score_version": "1.0.0",
+                  "pemo_last_scored_at": "2026-05-03T19:18:46.339Z",
+                  "pemo_score_rationale": "{\"firmographic\":{\"raw\":0.91,\"weighted\":31.85,\"max\":35,\"signals\":[\"country: tier-1 market (SA) (1)\",\"size: 15 employees → acceptable lower (0.7)\",\"industry: high-fit industry (retail) (1)\"]},\"intent\":{\"raw\":0.16,\"weighted\":4.8,\"max\":30,\"signals\":[\"no intent keywords detected\",\"general inquiry form intent: \\\"info\\\" (+0.16)\"]},\"source_quality\":{\"raw\":0.95,\"weighted\":19,\"max\":20,\"signals\":[\"source \\\"partner\\\" weighted at 0.95\"]},\"engagement\":{\"raw\":0.52,\"weighted\":7.8,\"max\":15,\"signals\":[\"submitted 2d ago → this_week\",\"first visit\"]}}",
+                  "pemo_qualification_summary": "Al-Najm Trading Co is a warm lead from Saudi Arabia in the retail sector, seeking an expense management solution for their small team of 15. The lead comes from a trusted partner source, but lacks strong intent keywords. Recommend nurturing this lead with tailored information before pursuing a demo call.",
+                  "pemo_firmographic_score": 31.85,
+                  "pemo_intent_score": 4.8,
+                  "pemo_source_score": 19,
+                  "pemo_engagement_score": 7.8,
+                  "pemo_confidence": 1,
+                  "pemo_country_tier": "tier_1",
+                  "pemo_lead_source_channel": "partner",
+                  "pemo_form_intent": "info",
+                  "pemo_inbound_source_shape": "partner_referral",
+                  "pemo_request_id": "req_moq5lvvb_fxf1xunu",
+                  "pemo_existing_customer": "false",
+                  "pemo_disqualified": "false",
+                  "pemo_company_size_band": "small",
+                  "pemo_visit_count": 1,
+                  "pemo_language": "ar",
+                  "pemo_raw_message": "تم تحويلي إليكم من شريككم. نبحث عن حل لإدارة المصاريف لفريقنا الصغير.",
+                  "pemo_tech_stack_signals": "excel"
+                }
+              }
+            ]
+          },
+          "_hubspot_canonical_source": "partner",
+          "_hubspot": {
+            "contact_id": "770832159940",
+            "contact_url": "https://app-eu1.hubspot.com/contacts/148389230/record/0-1/770832159940",
+            "created": true,
+            "status": "COMPLETE",
+            "synced_at": "2026-05-03T19:18:49.140Z"
+          },
+          "_trello_payload": {
+            "idList": "69f4e05a72ae6156147cf191",
+            "name": "[63.5] Al-Najm Trading Co — Khalid Al-Otaibi",
+            "desc": "**Tier:** WARM — 63.5/100  |  Confidence: 1\n\n**Qualification Summary**\nAl-Najm Trading Co is a warm lead from Saudi Arabia in the retail sector, seeking an expense management solution for their small team of 15. The lead comes from a trusted partner source, but lacks strong intent keywords. Recommend nurturing this lead with tailored information before pursuing a demo call.\n\n**Lead Profile**\n- Country: SA  |  Industry: retail  |  Size: 15\n- Source: partner (raw: partner)\n- Language: ar\n- Tech stack: excel\n\n**Score Breakdown**\n- **Firmographic** 31.85/35\n  - country: tier-1 market (SA) (1)\n  - size: 15 employees → acceptable lower (0.7)\n  - industry: high-fit industry (retail) (1)\n- **Intent** 4.8/30\n  - no intent keywords detected\n  - general inquiry form intent: \"info\" (+0.16)\n- **Source Quality** 19/20\n  - source \"partner\" weighted at 0.95\n- **Engagement** 7.8/15\n  - submitted 2d ago → this_week\n  - first visit\n\n**Inbound Message**\n> تم تحويلي إليكم من شريككم. نبحث عن حل لإدارة المصاريف لفريقنا الصغير.\n\n---\n🔗 [HubSpot Contact](https://app-eu1.hubspot.com/contacts/148389230/record/0-1/770832159940)  |  📧 khalid@alnajm-trading.sa  |  ☎️ +966501234567\nRequest ID: `req_moq5lvvb_fxf1xunu`",
+            "idLabels": [
+              "69f5140ccb73b80cc865e95a",
+              "69f5140e8f6f645b60c7631f",
+              "69f5140e69db2845a4c45346"
+            ],
+            "idLabels_csv": "69f5140ccb73b80cc865e95a,69f5140e8f6f645b60c7631f,69f5140e69db2845a4c45346",
+            "pos": "top"
+          },
+          "_trello_target": {
+            "tier": "warm",
+            "board_id": "69f4dfc5b6ea0d49bb2a5416",
+            "list_id": "69f4e05a72ae6156147cf191",
+            "labels_applied": 3
+          },
+          "_trello_card": {
+            "id": "69f79f9914ddd0e83dc18476",
+            "url": "https://trello.com/c/ewobDi0A/1-635-al-najm-trading-co-khalid-al-otaibi",
+            "shortUrl": "https://trello.com/c/ewobDi0A",
+            "idList": "69f4e05a72ae6156147cf191",
+            "idBoard": "69f4dfc5b6ea0d49bb2a5416"
+          },
+          "_assignment": {
+            "rep_email": "khalid@pemo.io",
+            "rep_name": "Khalid Al-Otaibi",
+            "rep_slack": "U_KHALID_MOCK",
+            "bucket_reason": "bucket=SA/ar, 1 specific rep(s) eligible",
+            "assigned_at": "2026-05-03T19:18:49.739Z"
+          }
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Sub-flow Trigger": {
+      "main": [
+        [
+          {
+            "node": "Sequence Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sequence Config": {
+      "main": [
+        [
+          {
+            "node": "AI: Day 0 Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI: Day 0 Email": {
+      "main": [
+        [
+          {
+            "node": "Parse Day 0",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Day 0": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Send Day 0",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail: Send Day 0": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: Log Day 0",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot: Log Day 0": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: Mark Day 0 Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 3 Days": {
+      "main": [
+        [
+          {
+            "node": "Reply Check (after 3d)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply Check (after 3d)": {
+      "main": [
+        [
+          {
+            "node": "Replied After Day 0?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Replied After Day 0?": {
+      "main": [
+        [
+          {
+            "node": "Slack: Stop on Reply (D0→D3)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI: Day 3 Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI: Day 3 Email": {
+      "main": [
+        [
+          {
+            "node": "Parse Day 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Day 3": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Send Day 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail: Send Day 3": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: Log Day 3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot: Log Day 3": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: Mark Day 3 Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot: Mark Day 3 Sent": {
+      "main": [
+        [
+          {
+            "node": "Wait 4 Days",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait 4 Days": {
+      "main": [
+        [
+          {
+            "node": "Reply Check (after 7d)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply Check (after 7d)": {
+      "main": [
+        [
+          {
+            "node": "Replied After Day 3?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Replied After Day 3?": {
+      "main": [
+        [
+          {
+            "node": "Slack: Stop on Reply (D3→D7)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "AI: Day 7 Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI: Day 7 Email": {
+      "main": [
+        [
+          {
+            "node": "Parse Day 7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Day 7": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Send Day 7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail: Send Day 7": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: Log Day 7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot: Log Day 7": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: Mark Sequence Completed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot: Mark Sequence Completed": {
+      "main": [
+        [
+          {
+            "node": "Slack: Sequence Done",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot: Mark Day 0 Sent": {
+      "main": [
+        [
+          {
+            "node": "Wait 3 Days",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "cc48306c-df49-4f14-a566-9edeb44ae827",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0487ed9ccc17a9d076650450c968108f2992031fced90b237cc1c26ded8d9e33"
+  },
+  "id": "hseiwfhymvo1A2zE",
+  "tags": []
+}

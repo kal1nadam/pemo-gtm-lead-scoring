@@ -1,0 +1,17 @@
+{
+  "_comment": "Sample inbound payload simulating a website demo-request form submission. Use with curl to test WF-MAIN.",
+  "source_channel": "website_form",
+  "submitted_at": "2026-05-01T08:00:00Z",
+  "form_data": {
+    "company_name": "Falcon Logistics LLC",
+    "contact_name": "Ahmed Al-Mansoori",
+    "email": "ahmed@falconlogistics.ae",
+    "phone": "+971501234567",
+    "country": "AE",
+    "company_size": "200",
+    "inquiry_type": "demo",
+    "message": "We're scaling fast and need a demo of Pemo. Looking to replace our current expense process this quarter — it's a mess of shared cards and Excel. Can you book a call this week?",
+    "language": "en",
+    "visit_count": 4
+  }
+}

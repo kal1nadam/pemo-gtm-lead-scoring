@@ -1,0 +1,18 @@
+{
+  "_comment": "Lead with negative intent signal. Scoring engine forces disqualified=true and total<=10 -> cold tier. Cold workflow's IF Disqualified branch should fire (no email sent).",
+  "source_channel": "website_form",
+  "submitted_at": "2026-05-03T09:00:00Z",
+  "form_data": {
+    "company_name": "Acme Corp",
+    "contact_name": "John Doe",
+    "email": "john@acme.ae",
+    "phone": "+971500000001",
+    "country": "AE",
+    "company_size": "100",
+    "industry": "saas",
+    "inquiry_type": "info",
+    "message": "Please remove me from your list, not interested in this product.",
+    "language": "en",
+    "visit_count": 1
+  }
+}

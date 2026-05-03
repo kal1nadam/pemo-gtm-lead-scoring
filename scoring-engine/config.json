@@ -1,0 +1,123 @@
+{
+  "score_version": "1.0.0",
+  "weights": {
+    "firmographic": 35,
+    "intent": 30,
+    "source_quality": 20,
+    "engagement": 15
+  },
+  "tiers": {
+    "hot": { "min": 80, "max": 100 },
+    "warm": { "min": 50, "max": 79 },
+    "cold": { "min": 0, "max": 49 }
+  },
+  "icp": {
+    "countries": {
+      "tier_1": ["AE", "SA"],
+      "tier_2": ["EG"],
+      "tier_3": ["KW", "BH", "QA", "OM", "JO"],
+      "out_of_market": []
+    },
+    "company_size": {
+      "ideal": { "min": 20, "max": 200, "score": 1.0 },
+      "acceptable_lower": { "min": 10, "max": 19, "score": 0.7 },
+      "acceptable_upper": { "min": 201, "max": 500, "score": 0.8 },
+      "marginal_small": { "min": 5, "max": 9, "score": 0.4 },
+      "marginal_large": { "min": 501, "max": 1000, "score": 0.5 },
+      "out_of_fit_small": { "min": 0, "max": 4, "score": 0.1 },
+      "out_of_fit_large": { "min": 1001, "max": 999999, "score": 0.2 }
+    },
+    "industries": {
+      "high_fit": [
+        "saas", "software", "technology", "ecommerce", "e-commerce",
+        "professional services", "consulting", "marketing agency", "digital agency",
+        "media", "advertising", "fintech", "healthtech", "edtech",
+        "logistics", "retail", "f&b", "food and beverage", "hospitality",
+        "real estate", "construction"
+      ],
+      "medium_fit": [
+        "manufacturing", "wholesale", "import export", "automotive",
+        "education", "healthcare", "legal", "accounting"
+      ],
+      "low_fit": [
+        "government", "non-profit", "ngo", "agriculture", "mining",
+        "personal", "freelance"
+      ]
+    }
+  },
+  "intent_signals": {
+    "high_intent_keywords": [
+      "demo", "pricing", "trial", "buy", "purchase", "implement", "deploy",
+      "evaluate", "compare", "switch from", "moving from", "replacing",
+      "this quarter", "this month", "asap", "urgent", "immediately",
+      "decision maker", "rfp", "proposal", "contract"
+    ],
+    "medium_intent_keywords": [
+      "looking for", "interested in", "exploring", "considering",
+      "learn more", "tell me about", "how does", "what is", "info"
+    ],
+    "low_intent_keywords": [
+      "just curious", "general question", "browsing", "research",
+      "student", "academic", "homework", "thesis"
+    ],
+    "negative_signals": [
+      "unsubscribe", "remove me", "spam", "not interested",
+      "wrong person", "different company"
+    ],
+    "high_intent_score": 1.0,
+    "medium_intent_score": 0.6,
+    "low_intent_score": 0.2,
+    "demo_request_bonus": 0.2,
+    "explicit_form_intent_weight": 0.4
+  },
+  "source_quality": {
+    "referral": 1.0,
+    "partner": 0.95,
+    "event": 0.9,
+    "webinar": 0.85,
+    "content_download": 0.7,
+    "organic_search": 0.65,
+    "direct": 0.6,
+    "social_organic": 0.55,
+    "paid_search": 0.5,
+    "paid_social": 0.45,
+    "cold_outbound": 0.3,
+    "list_purchase": 0.2,
+    "unknown": 0.4
+  },
+  "engagement": {
+    "submission_recency_hours": {
+      "fresh": { "max_hours": 1, "score": 1.0 },
+      "recent": { "max_hours": 24, "score": 0.85 },
+      "this_week": { "max_hours": 168, "score": 0.6 },
+      "stale": { "max_hours": 720, "score": 0.3 },
+      "very_stale": { "max_hours": 999999, "score": 0.1 }
+    },
+    "repeat_visits": {
+      "first_visit": 0.4,
+      "few_visits": { "min": 2, "max": 4, "score": 0.7 },
+      "engaged": { "min": 5, "max": 9, "score": 0.9 },
+      "highly_engaged": { "min": 10, "max": 9999, "score": 1.0 }
+    },
+    "submission_recency_weight": 0.6,
+    "repeat_visits_weight": 0.4
+  },
+  "tech_stack_signals": {
+    "high_value": ["xero", "quickbooks", "zoho books", "tally", "sage", "netsuite", "odoo"],
+    "competitor_signal": ["brex", "ramp", "spendesk", "pleo", "soldo", "mesh payments"],
+    "low_value": ["excel", "spreadsheet", "google sheets", "manual"],
+    "high_value_bonus": 0.1,
+    "competitor_signal_bonus": 0.15,
+    "low_value_bonus": 0.05
+  },
+  "confidence": {
+    "required_fields": ["company_name", "email", "country"],
+    "important_fields": ["company_size", "raw_message", "source"],
+    "enrichment_fields": ["industry", "website", "tech_stack"],
+    "weights": {
+      "required": 0.5,
+      "important": 0.3,
+      "enrichment": 0.2
+    }
+  }
+}

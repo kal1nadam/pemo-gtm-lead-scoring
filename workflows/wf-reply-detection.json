@@ -1,0 +1,350 @@
+{
+  "name": "Pemo: Reply Detection",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-reply",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "96aef239-e323-4132-ad5b-b38bc0977244",
+      "name": "Reply Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -176,
+        144
+      ],
+      "webhookId": "lead-reply"
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Validate and normalize the incoming reply notification.\n * Real-world this could come from email-parsing services (Mailparser, Zapier-Email-Parser),\n * inbound webhooks from email providers (SendGrid, Mailgun), or HubSpot's own reply tracking.\n * For demo we accept a simple shape and normalize.\n */\n\nconst body = $input.first().json.body || $input.first().json;\n\nconst email = (body.email || body.from || body.sender || '').toString().trim().toLowerCase();\nconst replyAt = body.replied_at || body.timestamp || new Date().toISOString();\nconst excerpt = (body.excerpt || body.message_preview || body.body || '').toString().slice(0, 500);\nconst channel = body.channel || 'email';\n\nif (!email) {\n  return {\n    json: {\n      _valid: false,\n      _error: 'reply payload missing email/from/sender',\n      _ingested_at: new Date().toISOString()\n    }\n  };\n}\n\nreturn {\n  json: {\n    _valid: true,\n    email,\n    replied_at: replyAt,\n    excerpt,\n    channel,\n    _request_id: 'reply_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8),\n    _ingested_at: new Date().toISOString()\n  }\n};"
+      },
+      "id": "42e92a6e-ebc1-40a3-b22c-aa2701bb5872",
+      "name": "Validate Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        48,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "v1",
+              "leftValue": "={{ $json._valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "071bc227-0861-44a6-8456-e0f8129b5ade",
+      "name": "Valid Payload?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        272,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/contacts/search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ filterGroups: [ { filters: [ { propertyName: 'email', operator: 'EQ', value: $json.email } ] } ], properties: ['email', 'firstname', 'lastname', 'company', 'pemo_lead_tier', 'pemo_sequence_step', 'pemo_assigned_rep_email', 'pemo_qualification_summary'], limit: 1 }) }}",
+        "options": {}
+      },
+      "id": "6a3b2ded-c16a-4255-a0a1-aeb930397450",
+      "name": "HubSpot: Find Contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        496,
+        16
+      ],
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "KW7zeDVcuBn5tSOO",
+          "name": "Pemo Hubspot"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "f1",
+              "leftValue": "={{ $json.total }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "b0cd7d8c-cb75-4ccc-bb11-a66739de1d11",
+      "name": "Contact Found?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        704,
+        16
+      ]
+    },
+    {
+      "parameters": {
+        "method": "PATCH",
+        "url": "={{ `https://api.hubapi.com/crm/v3/objects/contacts/${$json.results[0].id}` }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ properties: { pemo_replied: 'true', pemo_replied_at: $('Validate Reply').item.json.replied_at, pemo_sequence_step: 'reply_received' } }) }}",
+        "options": {}
+      },
+      "id": "094cda21-beae-4525-9292-6076ba61662e",
+      "name": "HubSpot: Mark Replied",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        928,
+        -64
+      ],
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "KW7zeDVcuBn5tSOO",
+          "name": "Pemo Hubspot"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#leads-alerts",
+          "mode": "name"
+        },
+        "text": "={{ (() => { const r = $('Validate Reply').item.json; const c = $('HubSpot: Find Contact').item.json.results[0]; const props = c.properties || {}; return `📨 *Reply received* — ${props.firstname || ''} ${props.lastname || ''} from *${props.company || 'unknown'}*\\n\\n_Email:_ ${r.email}\\n_Tier:_ ${(props.pemo_lead_tier || 'unknown').toUpperCase()}\\n_Last sequence step:_ ${props.pemo_sequence_step || 'n/a'}\\n_Assigned rep:_ ${props.pemo_assigned_rep_email || 'unassigned'}\\n\\n*Reply excerpt:*\\n> ${(r.excerpt || '_(no preview)_').slice(0, 300)}\\n\\nActive sequences halted. Rep should follow up directly.\\n🔗 <https://app-eu1.hubspot.com/contacts/148389230/record/0-1/${c.id}|HubSpot Contact>`; })() }}",
+        "otherOptions": {}
+      },
+      "id": "475635b0-944e-40d0-b703-8e3d59ea299a",
+      "name": "Slack: Notify Rep",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        1152,
+        -64
+      ],
+      "webhookId": "5efa38d5-b309-4d41-92f8-0972dded5486",
+      "credentials": {
+        "slackApi": {
+          "id": "ppXNa85asyVoCHYl",
+          "name": "Pemo Slack Bot"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#leads-alerts",
+          "mode": "name"
+        },
+        "text": "={{ (() => { const r = $('Validate Reply').item.json; return `❓ *Reply from unknown sender*\\n\\nReceived a reply from \\`${r.email}\\` but no matching HubSpot contact was found. Could be:\\n- A reply from a delegated address (assistant, alias)\\n- A spoofed sender\\n- Lead never made it into HubSpot\\n\\nReply excerpt:\\n> ${(r.excerpt || '_(no preview)_').slice(0, 300)}\\n\\nManual review needed.`; })() }}",
+        "otherOptions": {}
+      },
+      "id": "ba0a2e24-e414-49bc-bd84-a74488dc84c8",
+      "name": "Slack: Unknown Sender",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        928,
+        144
+      ],
+      "webhookId": "40f15f90-15fe-451c-9e51-b618863b751d",
+      "credentials": {
+        "slackApi": {
+          "id": "ppXNa85asyVoCHYl",
+          "name": "Pemo Slack Bot"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#leads-alerts",
+          "mode": "name"
+        },
+        "text": "={{ `⚠️ *Invalid reply payload received*\\n\\n${$('Validate Reply').item.json._error || 'unknown error'}\\n\\nRequest ID: \\`${$('Validate Reply').item.json._request_id || 'n/a'}\\`` }}",
+        "otherOptions": {}
+      },
+      "id": "0770e850-d6de-4a1b-9fca-0018e044d209",
+      "name": "Slack: Invalid Payload",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [
+        496,
+        272
+      ],
+      "webhookId": "6058a212-8ba6-488d-8fa3-c6776162bc4a",
+      "credentials": {
+        "slackApi": {
+          "id": "ppXNa85asyVoCHYl",
+          "name": "Pemo Slack Bot"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "content": "## 🔁 Reply Detection\n\nSeparate workflow with its own webhook trigger.\n\n**Why a separate workflow:** reply detection has its own trigger (webhook), runs on a different lifecycle than MAIN, and can be replaced/scaled independently. In production this would be wired to inbound email parsing (SendGrid Inbound Parse, Mailgun Routes, Postmark, or HubSpot's own reply tracking). For the demo, a simple webhook accepting `{ email, excerpt, replied_at }` is enough.\n\n**Behavior:**\n1. Validate the payload (must include sender email).\n2. Search HubSpot for the contact.\n3. If found, set `pemo_replied=true`, `pemo_replied_at=now`, `pemo_sequence_step=reply_received`. Active warm/cold sequences will see this on their next reply check and halt.\n4. Slack alert posted to the assigned rep with reply excerpt and HubSpot link.\n5. Unknown sender or invalid payload paths get distinct Slack alerts so nothing is silently dropped.\n\nThis is the loop-closer for the entire outreach system. Without it, sequences keep firing even after a lead replies.",
+        "height": 476,
+        "width": 480
+      },
+      "id": "4daf11d8-8791-4bbc-9086-2fbede20eb36",
+      "name": "Sticky: Reply Detection overview",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -176,
+        -368
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Reply Webhook": {
+      "main": [
+        [
+          {
+            "node": "Validate Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Reply": {
+      "main": [
+        [
+          {
+            "node": "Valid Payload?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid Payload?": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: Find Contact",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack: Invalid Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot: Find Contact": {
+      "main": [
+        [
+          {
+            "node": "Contact Found?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Contact Found?": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: Mark Replied",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack: Unknown Sender",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot: Mark Replied": {
+      "main": [
+        [
+          {
+            "node": "Slack: Notify Rep",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "914ec1be-84d6-4f8b-8286-04f232b788ee",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0487ed9ccc17a9d076650450c968108f2992031fced90b237cc1c26ded8d9e33"
+  },
+  "id": "8ifniR9Jik9c0cLJ",
+  "tags": []
+}

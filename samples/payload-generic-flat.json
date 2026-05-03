@@ -1,0 +1,16 @@
+{
+  "_comment": "Flat payload with no recognized envelope (no form_data / lead / attendee). Exercises the Generic fallback branch — proves the system gracefully handles new or unexpected source shapes.",
+  "company_name": "Desert Rose Hospitality",
+  "contact_name": "Layla Ibrahim",
+  "email": "layla@desertrose.ae",
+  "phone": "+971503456789",
+  "country": "AE",
+  "company_size": 60,
+  "industry": "hospitality",
+  "message": "Looking into expense management options for our restaurant chain. Want to learn more about your platform.",
+  "inquiry_type": "info",
+  "language": "en",
+  "visit_count": 3,
+  "source": "paid_search",
+  "submitted_at": "2026-04-29T11:00:00Z"
+}

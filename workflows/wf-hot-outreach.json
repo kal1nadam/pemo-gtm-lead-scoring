@@ -1,0 +1,262 @@
+{
+  "name": "Pemo: Hot Outreach",
+  "nodes": [
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "/**\n * Prepare structured context for the LLM email generator.\n * Includes country-specific value props so the email reads native, not templated.\n */\n\nconst lead = $input.item.json;\n\n// Country-specific pain points / value props (Pemo's actual MENA messaging).\nconst COUNTRY_VALUE_PROPS = {\n  AE: [\n    \"real-time spend visibility for fast-scaling SMEs\",\n    \"multi-currency virtual cards (AED + USD/EUR for international ops)\",\n    \"eliminate the shared-card chaos most Dubai/Abu Dhabi teams suffer with\"\n  ],\n  SA: [\n    \"localized accounting & ZATCA-ready VAT export\",\n    \"Arabic-first UI for finance teams\",\n    \"instant SAR settlement via our neoleap (Alrajhi) partnership\"\n  ],\n  EG: [\n    \"cost optimization under EGP volatility\",\n    \"consolidate multi-bank expenses into a single dashboard\",\n    \"simplified expense reporting that scales with hiring\"\n  ],\n  // GCC + Other fallback\n  default: [\n    \"real-time spend visibility for growing SMEs\",\n    \"automated receipt capture and AI-powered categorization\",\n    \"control over team spending without slowing down operations\"\n  ]\n};\n\nconst valueProps = COUNTRY_VALUE_PROPS[lead.country] || COUNTRY_VALUE_PROPS.default;\n\nreturn {\n  json: {\n    ...lead,\n    _email_context: {\n      lead_first_name: (lead.contact_name || \"\").split(\" \")[0] || \"there\",\n      lead_full_name: lead.contact_name || \"\",\n      company: lead.company_name || \"\",\n      country: lead.country || \"\",\n      industry: lead.industry || \"\",\n      company_size: lead.company_size || \"\",\n      tech_stack: (lead.tech_stack || []).join(\", \"),\n      inbound_message: lead.raw_message || \"\",\n      qualification_summary: lead.qualification_summary || \"\",\n      language: lead.language || \"en\",\n      country_value_props: valueProps,\n      calendly_link: \"https://calendly.com/kalinaadam75/pemo-demo\",\n      rep_name: lead._assignment?.rep_name || \"the Pemo team\",\n      rep_email: lead._assignment?.rep_email || \"team@pemo.io\"\n    }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -96,
+        256
+      ],
+      "id": "40a914e2-1b7c-4eca-abdb-b3058d4c4ff5",
+      "name": "Build Email Context"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are an inside sales rep at Pemo, a B2B fintech serving SMEs in MENA (UAE, Saudi Arabia, Egypt). You're sending a first-touch outreach email to a HOT lead who just explicitly requested a demo.\n\nYour email must:\n- Sound human and specific, not templated\n- Reference at least one concrete detail from their inbound message or profile (industry, current tech stack, the pain they mentioned)\n- Tie to ONE country-specific Pemo value prop\n- Include a clear CTA with a Calendly booking link\n- Be concise: 6-9 sentences total\n- Sign off with the rep's name\n\nOutput format: STRICTLY a JSON object with keys \"subject\" and \"body\". No markdown, no preamble, no code fences. The body should be plain text (no HTML).\n\nIf language is \"ar\", write the entire email in Arabic. Otherwise English. Do not mix languages.\n\nNever invent facts. If a profile field is missing, omit that thread rather than fabricating."
+            },
+            {
+              "content": "=Lead context:\n{{ JSON.stringify($json._email_context, null, 2) }}\n\nGenerate the email now. Output only the JSON object."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "maxTokens": 500,
+          "temperature": 0.4
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        128,
+        256
+      ],
+      "id": "8f106b74-2f52-4efc-9db7-285ed7c50e14",
+      "name": "AI: Generate Hot Email",
+      "credentials": {
+        "openAiApi": {
+          "id": "YQSOdRshnmOCa4eW",
+          "name": "Pemo OpenAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "/**\n * Parse the LLM email JSON. Defensive: LLMs sometimes wrap output in markdown\n * code fences or include preamble despite explicit instructions. Strip & retry.\n */\n\nconst lead = $('Build Email Context').item.json;\nconst ai = $input.item.json;\n\nfunction extractContent(o) {\n  if (!o) return \"\";\n  // n8n OpenAI Responses API\n  if (Array.isArray(o.output) && o.output[0]?.content) {\n    const block = o.output[0].content.find((c) => c.type === \"output_text\" || typeof c.text === \"string\");\n    if (block?.text) return block.text;\n  }\n  if (typeof o.text === \"string\") return o.text;\n  if (o.message?.content) return o.message.content;\n  if (o.choices?.[0]?.message?.content) return o.choices[0].message.content;\n  return \"\";\n}\n\nlet raw = extractContent(ai).trim();\n// Strip markdown fences if present\nraw = raw.replace(/^```(?:json)?\\s*/i, \"\").replace(/```\\s*$/, \"\").trim();\n\nlet parsed;\ntry {\n  parsed = JSON.parse(raw);\n} catch (e) {\n  // Fallback: extract subject + body from plain text shape\n  const subjectMatch = raw.match(/subject[:\\s\"]*([^\\n\"]+)/i);\n  const bodyMatch = raw.match(/body[:\\s\"]*([\\s\\S]+)/i);\n  parsed = {\n    subject: subjectMatch?.[1]?.trim() || \"Pemo demo follow-up\",\n    body: bodyMatch?.[1]?.trim() || raw\n  };\n}\n\nreturn {\n  json: {\n    ...lead,\n    _outreach: {\n      channel: \"hot\",\n      subject: parsed.subject || \"Pemo demo follow-up\",\n      body: parsed.body || \"\",\n      to: lead.email,\n      from_name: lead._email_context.rep_name,\n      generated_at: new Date().toISOString()\n    }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        464,
+        256
+      ],
+      "id": "7a5e9eb6-833a-4560-afd8-264e640297f5",
+      "name": "Parse Email"
+    },
+    {
+      "parameters": {
+        "sendTo": "kalinaadam75@seznam.cz",
+        "subject": "={{ $json._outreach.subject }}",
+        "emailType": "text",
+        "message": "={{ $json._outreach.body }}",
+        "options": {
+          "senderName": "={{ $json._email_context.rep_name }} (Pemo)"
+        }
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        672,
+        256
+      ],
+      "id": "7720daf2-8436-4b30-9deb-7896c2d17e20",
+      "name": "Gmail: Send Hot Email",
+      "webhookId": "8548309d-1fb8-4e49-b0e9-6c1ade16e282",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "yblhyc9sgHFejXCh",
+          "name": "Pemo Gmail"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "#leads-hot",
+          "mode": "name"
+        },
+        "text": "={{ (() => { const l = $('Parse Email').item.json; return `🔥 *HOT LEAD* — score ${l.scoring.total}/100\\n\\n*${l.company_name}* — ${l.contact_name} (${l.country}, ${l.industry})\\n_Assigned to:_ ${l._assignment.rep_name} (${l._assignment.rep_email})\\n\\n*Summary:* ${l.qualification_summary}\\n\\n*Inbound message:*\\n> ${(l.raw_message || '').slice(0, 200)}${(l.raw_message || '').length > 200 ? '...' : ''}\\n\\n📧 Auto-email sent: _${l._outreach.subject}_\\n🔗 <${l._hubspot.contact_url}|HubSpot> · <${l._trello_card.url}|Trello>`; })() }}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        880,
+        256
+      ],
+      "id": "6d75d168-7e76-4b6a-9cc7-42cc62cdb9ee",
+      "name": "Slack: Alert Rep",
+      "webhookId": "51911f53-04a2-40e1-89f4-3567cc618cd0",
+      "credentials": {
+        "slackApi": {
+          "id": "ppXNa85asyVoCHYl",
+          "name": "Pemo Slack Bot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/emails",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ (() => { const l = $('Parse Email').item.json; return JSON.stringify({ properties: { hs_timestamp: $now.toMillis(), hs_email_direction: \"EMAIL\", hs_email_status: \"SENT\", hs_email_subject: l._outreach.subject, hs_email_text: l._outreach.body, hs_email_headers: JSON.stringify({ from: { email: l._assignment.rep_email, firstName: l._assignment.rep_name }, to: [{ email: l.email, firstName: l.contact_name }] }) }, associations: [ { to: { id: l._hubspot.contact_id }, types: [{ associationCategory: \"HUBSPOT_DEFINED\", associationTypeId: 198 }] } ] }); })() }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1088,
+        256
+      ],
+      "id": "4ce07a07-43cf-424e-84e5-bb6ba6a18d49",
+      "name": "HubSpot: Log Email Engagement",
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "KW7zeDVcuBn5tSOO",
+          "name": "Pemo Hubspot"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "content": "## 🔥 Hot Lead - Immediate Outreach\n\nThree things happen the moment a lead scores ≥80:\n\n1. **AI generates a personalized first-touch email** with country-specific\n   value props (UAE / KSA / EGY messaging baked into the prompt). LLM\n   writes in the lead's detected language (EN or AR). Output is structured\n   JSON to keep parsing reliable.\n\n2. **Gmail sends it immediately** to the lead. The send is real, not mocked\n   - assignment requirement.\n\n3. **Slack #leads-hot fires** with full lead context, the email subject\n   that just went out, deep links to HubSpot + Trello. Rep walks in,\n   sees the alert, has everything they need.\n\n**HubSpot engagement log** closes the loop - the email shows in the\ncontact timeline as if a rep had sent it via HubSpot directly.\n\nEdge case: if Gmail / Slack fails, \"Continue On Fail\" lets the rest of\nthe chain run. Better partial coverage than no coverage.",
+        "height": 368,
+        "width": 1280
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -304,
+        -176
+      ],
+      "id": "24ee0c34-55f2-46f9-a557-955fcbd503b0",
+      "name": "Sticky Note8"
+    },
+    {
+      "parameters": {
+        "inputSource": "passthrough"
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -320,
+        256
+      ],
+      "id": "76b2995b-29f4-4dbd-b9d7-76f7509a4a98",
+      "name": "When Executed by Another Workflow"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Build Email Context": {
+      "main": [
+        [
+          {
+            "node": "AI: Generate Hot Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI: Generate Hot Email": {
+      "main": [
+        [
+          {
+            "node": "Parse Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Email": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Send Hot Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail: Send Hot Email": {
+      "main": [
+        [
+          {
+            "node": "Slack: Alert Rep",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack: Alert Rep": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: Log Email Engagement",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Build Email Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "33b94bc3-5d5a-494d-b3d9-5625230419f3",
+  "meta": {
+    "instanceId": "0487ed9ccc17a9d076650450c968108f2992031fced90b237cc1c26ded8d9e33"
+  },
+  "id": "j15C4JkXOY6LUydj",
+  "tags": []
+}

@@ -1,0 +1,18 @@
+{
+  "_comment": "Out-of-market lead with vague intent. Should score COLD (~37/100): country outside ICP, agriculture industry, single visit, organic search.",
+  "source_channel": "website_form",
+  "submitted_at": "2026-04-15T10:00:00Z",
+  "form_data": {
+    "company_name": "GreenLeaf Agriculture Co",
+    "contact_name": "Mark Chen",
+    "email": "mark@greenleaf.ca",
+    "phone": "+14155550100",
+    "country": "CA",
+    "company_size": "8",
+    "industry": "agriculture",
+    "inquiry_type": "info",
+    "message": "Browsing for accounting tools, found your site.",
+    "language": "en",
+    "visit_count": 1
+  }
+}

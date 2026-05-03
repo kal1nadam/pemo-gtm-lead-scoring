@@ -1,0 +1,45 @@
+{
+  "_comment": "Definition of the standard Trello structure applied to each tier board (Hot, Warm, Cold). Run setup.js to provision/sync.",
+  "lists": [
+    { "name": "New", "pos": 1 },
+    { "name": "Assigned", "pos": 2 },
+    { "name": "Contacted", "pos": 3 },
+    { "name": "Replied", "pos": 4 },
+    { "name": "Qualified", "pos": 5 },
+    { "name": "Lost", "pos": 6 }
+  ],
+  "labels": {
+    "_note": "Color palette is constrained to Trello's available colors. Names mirror canonical values used in scoring config so reps + system speak the same vocabulary.",
+    "country": [
+      { "name": "UAE",  "color": "green"  },
+      { "name": "KSA",  "color": "green"  },
+      { "name": "EGY",  "color": "yellow" },
+      { "name": "GCC",  "color": "sky"    },
+      { "name": "Other","color": "black"  }
+    ],
+    "language": [
+      { "name": "EN", "color": "blue"   },
+      { "name": "AR", "color": "purple" }
+    ],
+    "source": [
+      { "name": "Referral",      "color": "lime"   },
+      { "name": "Partner",       "color": "lime"   },
+      { "name": "Event",         "color": "orange" },
+      { "name": "Webinar",       "color": "orange" },
+      { "name": "Content",       "color": "yellow" },
+      { "name": "Organic",       "color": "yellow" },
+      { "name": "Direct",        "color": "yellow" },
+      { "name": "Social",        "color": "yellow" },
+      { "name": "Paid Search",   "color": "pink"   },
+      { "name": "Paid Social",   "color": "pink"   },
+      { "name": "Cold Outbound", "color": "red"    }
+    ],
+    "flag": [
+      { "name": "Demo Request",      "color": "orange" },
+      { "name": "Low Confidence",    "color": "yellow" },
+      { "name": "Existing Customer", "color": "pink"   },
+      { "name": "Disqualified",      "color": "red"    },
+      { "name": "Stale",             "color": "black"  }
+    ]
+  }
+}

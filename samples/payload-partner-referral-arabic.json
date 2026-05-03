@@ -1,0 +1,22 @@
+{
+  "_comment": "Sample inbound payload simulating a partner referral with Arabic message (Required Scenario 2).",
+  "source_channel": "partner_referral",
+  "submitted_at": "2026-05-01T09:00:00Z",
+  "partner": {
+    "name": "GCC Fintech Partners",
+    "id": "partner_gfp_001"
+  },
+  "lead": {
+    "company_name": "شركة النجم التجارية",
+    "company_name_en": "Al-Najm Trading Co",
+    "contact_name": "Khalid Al-Otaibi",
+    "email": "khalid@alnajm-trading.sa",
+    "phone": "+966501234567",
+    "country": "SA",
+    "company_size": "15",
+    "inquiry_type": "info",
+    "message": "تم تحويلي إليكم من شريككم. نبحث عن حل لإدارة المصاريف لفريقنا الصغير.",
+    "language": "ar",
+    "visit_count": 1
+  }
+}

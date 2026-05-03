@@ -1,0 +1,1052 @@
+{
+  "name": "Pemo: Lead Intake & Routing",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-intake",
+        "responseMode": "lastNode",
+        "options": {
+          "responseCode": {
+            "values": {}
+          }
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "fb34c2a3-c803-4e73-b0eb-d115bd68ba18",
+      "name": "Webhook",
+      "webhookId": "215ed078-2035-4d83-8e24-0d5c267975be"
+    },
+    {
+      "parameters": {
+        "jsCode": "/**\n * Pre-process: detect payload shape, detect language, attach metadata.\n * Field mapping is delegated to per-shape Set nodes downstream.\n */\nconst body = $input.first().json.body || $input.first().json;\n\nfunction detectShape(p) {\n  if (p.form_data) return \"website_form\";\n  if (p.lead && p.partner) return \"partner_referral\";\n  if (p.attendee) return \"event\";\n  return \"generic\";\n}\n\nfunction getMessage(p) {\n  return p.form_data?.message\n    || p.lead?.message\n    || p.attendee?.notes\n    || p.message\n    || p.raw_message\n    || \"\";\n}\n\nfunction getDeclaredLang(p) {\n  return p.form_data?.language\n    || p.lead?.language\n    || p.attendee?.lang\n    || p.language\n    || null;\n}\n\nfunction detectLanguage(text, declared) {\n  if (declared && [\"en\", \"ar\"].includes(String(declared).toLowerCase())) {\n    return String(declared).toLowerCase();\n  }\n  // Arabic Unicode block detection\n  return /[\\u0600-\\u06FF]/.test(text || \"\") ? \"ar\" : \"en\";\n}\n\nreturn [{\n  json: {\n    _shape: detectShape(body),\n    _language: detectLanguage(getMessage(body), getDeclaredLang(body)),\n    _request_id: \"req_\" + Date.now().toString(36) + \"_\" + Math.random().toString(36).slice(2, 10),\n    _ingested_at: new Date().toISOString(),\n    _schema_version: \"1.0.0\",\n    body\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        0
+      ],
+      "id": "34034d7c-f4b6-475a-842a-9bc8383d0f65",
+      "name": "Pre-process"
+    },
+    {
+      "parameters": {
+        "content": "## 🔵 Normalization Layer\n\nInbound leads arrive in **different shapes** depending on source - website\nforms, partner referrals, event registrations, etc. Each has a different\nfield structure.\n\nThis block:\n1. **Detects** the payload shape\n2. **Branches** to a shape-specific mapper (Switch + Set nodes)\n3. **Merges** back into a unified canonical schema\n4. **Validates** required fields before downstream processing\n\n**To add a new source type** (e.g. LinkedIn lead form):\n- add a new branch to the Switch node\n- add a Set node mapping its fields to canonical names\n- the rest of the pipeline doesn't change\n\nThe canonical schema is the single contract every downstream\nnode depends on. Source isolation is here.",
+        "height": 384,
+        "width": 1520,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        208,
+        -496
+      ],
+      "id": "b5b429ff-c786-443b-88be-5d0b019def02",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json._shape }}",
+                    "rightValue": "website_form",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "eb000142-3aaf-40a7-9484-72ba5dd276cb"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Website Form"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "3f0c0490-a054-4d3f-9e0e-9c7844f0a347",
+                    "leftValue": "={{ $json._shape }}",
+                    "rightValue": "partner_referral",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Partner Referral"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "9297fbb5-f699-4e9f-a731-fa6cda06fa2c",
+                    "leftValue": "={{ $json._shape }}",
+                    "rightValue": "event",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Event"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "Generic"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        416,
+        -32
+      ],
+      "id": "2f7d66b1-24eb-4db9-8dfd-aa1e1ef89005",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"company_name\": \"{{ $json.body.company_name }}\",\n  \"contact_name\": \"{{ $json.body.contact_name }}\",\n  \"email\": \"{{ $json.body.email }}\",\n  \"phone\": \"{{ $json.body.phone }}\",\n  \"country\": \"{{ $json.body.country }}\",\n  \"company_size\": \"{{ $json.body.company_size }}\",\n  \"raw_message\": \"{{ $json.body.message || $json.body.raw_message }}\",\n  \"form_intent\": \"{{ $json.body.inquiry_type || $json.body.form_intent || '' }}\",\n  \"visit_count\": \"{{ $json.body.visit_count || 0 }}\",\n  \"industry\": \"{{ $json.body.industry || '' }}\",\n  \"source\": \"{{ $json.body.source || 'unknown' }}\",\n  \"submitted_at\": \"{{ $json.body.submitted_at }}\"\n}",
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        768,
+        416
+      ],
+      "id": "fca0f36a-e430-4b0a-a933-9a050d4f061f",
+      "name": "Map: Generic"
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"company_name\": \"{{ $json.body.attendee.company }}\",\n  \"contact_name\": \"{{ $json.body.attendee.name }}\",\n  \"email\": \"{{ $json.body.attendee.work_email }}\",\n  \"phone\": \"{{ $json.body.attendee.phone_number }}\",\n  \"country\": \"{{ $json.body.attendee.country_code }}\",\n  \"company_size\": \"{{ $json.body.attendee.team_size }}\",\n  \"raw_message\": \"{{ $json.body.attendee.notes }}\",\n  \"form_intent\": \"{{ $json.body.attendee.interest || '' }}\",\n  \"visit_count\": \"{{ $json.body.attendee.visit_count || 1 }}\",\n  \"industry\": \"{{ $json.body.attendee.industry || '' }}\",\n  \"source\": \"event\",\n  \"submitted_at\": \"{{ $json.body.registered_at }}\",\n  \"event_name\": \"{{ $json.body.event_name }}\"\n}",
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        768,
+        272
+      ],
+      "id": "48fe4861-3914-4e8e-aa83-eab347dc5c7f",
+      "name": "Map: Event",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"company_name\": \"{{ $json.body.lead.company_name_en || $json.body.lead.company_name }}\",\n  \"company_name_native\": \"{{ $json.body.lead.company_name }}\",\n  \"contact_name\": \"{{ $json.body.lead.contact_name }}\",\n  \"email\": \"{{ $json.body.lead.email }}\",\n  \"phone\": \"{{ $json.body.lead.phone }}\",\n  \"country\": \"{{ $json.body.lead.country }}\",\n  \"company_size\": \"{{ $json.body.lead.company_size }}\",\n  \"raw_message\": \"{{ $json.body.lead.message }}\",\n  \"form_intent\": \"{{ $json.body.lead.inquiry_type || '' }}\",\n  \"visit_count\": \"{{ $json.body.lead.visit_count }}\",\n  \"industry\": \"{{ $json.body.lead.industry || '' }}\",\n  \"source\": \"partner\",\n  \"submitted_at\": \"{{ $json.body.submitted_at }}\",\n  \"partner_name\": \"{{ $json.body.partner.name }}\",\n  \"partner_id\": \"{{ $json.body.partner.id }}\"\n}",
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        768,
+        128
+      ],
+      "id": "bd8febdd-841d-474e-8ad4-233ebe717655",
+      "name": "Map: Partner Referral",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "mode": "raw",
+        "jsonOutput": "={\n  \"company_name\": \"{{ $json.body.form_data.company_name }}\",\n  \"contact_name\": \"{{ $json.body.form_data.contact_name }}\",\n  \"email\": \"{{ $json.body.form_data.email }}\",\n  \"phone\": \"{{ $json.body.form_data.phone }}\",\n  \"country\": \"{{ $json.body.form_data.country }}\",\n  \"company_size\": \"{{ $json.body.form_data.company_size }}\",\n  \"raw_message\": \"{{ $json.body.form_data.message }}\",\n  \"form_intent\": \"{{ $json.body.form_data.inquiry_type || '' }}\",\n  \"visit_count\": \"{{ $json.body.form_data.visit_count }}\",\n  \"industry\": \"{{ $json.body.form_data.industry || '' }}\",\n  \"source\": \"{{ $json.body.source_channel || 'website_form' }}\",\n  \"submitted_at\": \"{{ $json.body.submitted_at }}\"\n}",
+        "includeOtherFields": true,
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        768,
+        -16
+      ],
+      "id": "f5e1d393-e975-4b78-b0e7-267b5787bd02",
+      "name": "Map: Website Form",
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "numberInputs": 4
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1120,
+        336
+      ],
+      "id": "f5264c07-9c24-4694-bc82-9b90865a2808",
+      "name": "Merge Branches"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "/**\n * Final cleanup + validation.\n * - Normalizes email (lowercase, trim), country (UPPER, 2-letter), phone (digits + leading +)\n * - Drops the raw `body` (keeps audit trail via _request_id elsewhere)\n * - Adds derived fields (email_domain)\n * - Validates required fields, attaches _validation block\n *\n * Soft-fail philosophy: invalid leads still pass through but are flagged.\n * Routing layer decides what to do with invalid leads (typically: write to a\n * \"rejects\" log + Slack alert, do not push to CRM).\n */\n\nconst item = $input.item.json;\n\nfunction normEmail(e) {\n  return (e || \"\").toString().trim().toLowerCase() || null;\n}\n\nfunction normCountry(c) {\n  if (!c) return null;\n  return c.toString().trim().toUpperCase().slice(0, 2);\n}\n\nfunction normPhone(p) {\n  if (!p) return null;\n  return p.toString().replace(/[^\\d+]/g, \"\") || null;\n}\n\nfunction nullIfEmpty(v) {\n  if (v === undefined || v === null) return null;\n  if (typeof v === \"string\" && v.trim() === \"\") return null;\n  return v;\n}\n\nfunction emailDomain(email) {\n  if (!email) return null;\n  const at = email.indexOf(\"@\");\n  return at > -1 ? email.slice(at + 1) : null;\n}\n\nconst email = normEmail(item.email);\n\nconst lead = {\n  // canonical fields\n  company_name: nullIfEmpty((item.company_name || \"\").toString().trim()),\n  contact_name: nullIfEmpty((item.contact_name || \"\").toString().trim()),\n  email,\n  email_domain: emailDomain(email),\n  phone: normPhone(item.phone),\n  country: normCountry(item.country),\n  company_size: nullIfEmpty(item.company_size),\n  source: item.source || \"unknown\",\n  raw_message: nullIfEmpty((item.raw_message || \"\").toString().trim()),\n  language: item._language || \"en\",\n\n  // extended fields (used by scoring + enrichment downstream)\n  form_intent: nullIfEmpty(item.form_intent),\n  visit_count: Number(item.visit_count) || 0,\n  industry: nullIfEmpty(item.industry),\n  website: null,\n  tech_stack: [],\n\n  // shape-specific extras (only present on some sources)\n  company_name_native: nullIfEmpty(item.company_name_native),\n  partner_name: nullIfEmpty(item.partner_name),\n  partner_id: nullIfEmpty(item.partner_id),\n  event_name: nullIfEmpty(item.event_name),\n\n  // timestamps\n  submitted_at: item.submitted_at || new Date().toISOString(),\n\n  // ingestion metadata\n  _request_id: item._request_id,\n  _source_shape: item._shape,\n  _ingested_at: item._ingested_at,\n  _schema_version: item._schema_version\n};\n\n// --- Validation ---\nconst errors = [];\nconst warnings = [];\n\nif (!lead.email) errors.push(\"email missing\");\nif (!lead.company_name) errors.push(\"company_name missing\");\nif (!lead.country) errors.push(\"country missing\");\n\nif (!lead.company_size) warnings.push(\"company_size missing — confidence will drop\");\nif (!lead.raw_message) warnings.push(\"raw_message missing — intent score will be low\");\nif (!lead.industry) warnings.push(\"industry missing — enrichment will need to fill this\");\n\nlead._validation = {\n  valid: errors.length === 0,\n  errors,\n  warnings\n};\n\nreturn { json: lead };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        368
+      ],
+      "id": "548b3e2f-1164-4105-9320-9e656be272ce",
+      "name": "Validate & Finalize"
+    },
+    {
+      "parameters": {
+        "content": "### Soft-fail validation\n\nInvalid leads (missing email/company/country) **don't crash** - they\npass through with `_validation.valid = false`. The routing layer\nlater decides what to do with them (typically: write to rejects log\n+ Slack alert, never push to CRM).\n\nThis separates \"what's wrong\" from \"how to handle it\" - easier to\nchange the policy without touching the validator.",
+        "height": 192,
+        "width": 480
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1248,
+        160
+      ],
+      "id": "1eefbfcf-0f9c-4e76-a041-59884510f225",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/contacts/search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"filterGroups\": [\n    {\n      \"filters\": [\n        {\n          \"propertyName\": \"email\",\n          \"operator\": \"EQ\",\n          \"value\": \"={{ $json.email }}\"\n        }\n      ]\n    }\n  ],\n  \"properties\": [\"email\", \"firstname\", \"lastname\", \"company\", \"pemo_existing_customer\", \"pemo_lead_tier\"],\n  \"limit\": 1\n}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1776,
+        368
+      ],
+      "id": "234e8e7e-a4d1-4ec4-9584-b894b2a1c2f8",
+      "name": "HubSpot: Search Contact",
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "KW7zeDVcuBn5tSOO",
+          "name": "Pemo Hubspot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## 🔵 Lead Hydration\n\nTwo operations before scoring:\n\n**1. Dedup check** - query HubSpot by email. If contact exists,\nflag as `existing_customer: true` and route to the account\nmanager flow downstream. New leads continue to enrichment.\n\n**2. Enrichment** - fill in industry, website, tech stack signals\nthat the inbound payload didn't carry. Mock enrichment is used\nhere for reproducibility; in production this is a swap-in call to\nExa or Clearbit (see ENRICHMENT_MODE flag in .env).\n\n> Why HTTP Request instead of native HubSpot Search node:\n> predictable empty-result handling and explicit control over\n> which properties come back. Native node assumes a found\n> contact in some operations.",
+        "height": 320,
+        "width": 560
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        1776,
+        32
+      ],
+      "id": "fdd2395e-b318-41a3-b359-86e980c013f8",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "/**\n * Dedup check — merges HubSpot search result back with the canonical lead.\n *\n * Outcomes:\n *  - existing_customer = true  → contact found in HubSpot, route to AM downstream\n *  - existing_customer = false → new lead, continue normal flow\n *\n * Match strategy here is exact email. The next iteration could add\n * email-domain + company-name fuzzy match for the case where someone\n * submits with a different email but same company.\n */\n\nconst lead = $('Validate & Finalize').item.json;\nconst search = $input.item.json;\n\nconst found = (search.results || [])[0] || null;\n\nconst enriched = {\n  ...lead,\n  existing_customer: !!found,\n  hubspot_contact_id: found?.id || null,\n  hubspot_existing_properties: found?.properties || null,\n  _dedup: {\n    matched_on: found ? \"email_exact\" : null,\n    search_total: search.total || 0\n  }\n};\n\nreturn { json: enriched };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2016,
+        368
+      ],
+      "id": "3afc51bf-25ab-4950-9bbd-9c9f18233d5c",
+      "name": "Dedup Check"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "/**\n * Mock enrichment — simulates an Exa/Clearbit lookup keyed on email domain.\n *\n * In production this is a swap-in HTTP call — the interface is identical:\n * input domain → output { industry, website, tech_stack, employees_estimate }.\n *\n * Additive: never overwrites fields the inbound lead already provided.\n * Confidence drops only for fields that even enrichment couldn't fill.\n */\n\nconst lead = $input.item.json;\nconst domain = lead.email_domain;\n\n// Mock dataset keyed by email domain. In production: replace with Exa.\nconst MOCK_DB = {\n  \"falconlogistics.ae\":   { industry: \"logistics\",            website: \"https://falconlogistics.ae\",   tech_stack: [\"xero\", \"google sheets\"],  employees_estimate: 200 },\n  \"alnajm-trading.sa\":    { industry: \"retail\",               website: \"https://alnajm-trading.sa\",    tech_stack: [\"excel\"],                  employees_estimate: 15  },\n  \"brightspark.ae\":       { industry: \"media\",                website: \"https://brightspark.ae\",       tech_stack: [\"zoho books\"],             employees_estimate: 45  },\n  \"cairotech.eg\":         { industry: \"saas\",                 website: \"https://cairotech.eg\",         tech_stack: [\"spendesk\", \"quickbooks\"], employees_estimate: 80  },\n  \"desertrose.ae\":        { industry: \"hospitality\",          website: \"https://desertrose.ae\",        tech_stack: [\"tally\"],                  employees_estimate: 60  },\n  \"emiratesconstruction.ae\": { industry: \"construction\",      website: \"https://emiratesconstruction.ae\", tech_stack: [\"sage\", \"manual\"],     employees_estimate: 350 },\n  \"greenleaf.ca\":         { industry: \"agriculture\",          website: \"https://greenleaf.ca\",         tech_stack: [],                         employees_estimate: 8   },\n  \"aub.edu.lb\":           { industry: \"education\",            website: \"https://aub.edu.lb\",           tech_stack: [],                         employees_estimate: 5000 },\n  \"oldco.ae\":             { industry: \"professional services\",website: \"https://oldco.ae\",             tech_stack: [\"excel\"],                  employees_estimate: 30  },\n  \"acme.ae\":              { industry: \"saas\",                 website: \"https://acme.ae\",              tech_stack: [\"xero\"],                   employees_estimate: 100 }\n};\n\nfunction lookup(domain) {\n  if (!domain) return null;\n  // Exact match first\n  if (MOCK_DB[domain]) return MOCK_DB[domain];\n  // Public-domain emails (gmail, etc.) → can't enrich from domain alone\n  const PUBLIC_DOMAINS = [\"gmail.com\", \"yahoo.com\", \"hotmail.com\", \"outlook.com\", \"icloud.com\"];\n  if (PUBLIC_DOMAINS.includes(domain.toLowerCase())) return { _public_email: true };\n  return null;\n}\n\nconst enrichment = lookup(domain);\nconst found = enrichment && !enrichment._public_email;\n\n// Additive merge: only fill what's missing in the original lead\nconst enriched = {\n  ...lead,\n  industry:           lead.industry           || (found ? enrichment.industry           : null),\n  website:            lead.website            || (found ? enrichment.website            : null),\n  tech_stack:         (lead.tech_stack && lead.tech_stack.length) ? lead.tech_stack\n                                              : (found ? enrichment.tech_stack          : []),\n  // Keep original company_size if provided; only fall back to enrichment\n  company_size:       lead.company_size       || (found ? enrichment.employees_estimate : lead.company_size),\n  _enrichment: {\n    mode: \"mock\",\n    matched: found,\n    matched_on: found ? \"email_domain_exact\" : null,\n    domain,\n    is_public_email: !!(enrichment && enrichment._public_email),\n    fields_filled: found\n      ? [\"industry\",\"website\",\"tech_stack\",\"company_size\"].filter(f => !lead[f] || (Array.isArray(lead[f]) && !lead[f].length))\n      : []\n  }\n};\n\nreturn { json: enriched };"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2240,
+        368
+      ],
+      "id": "9d28bbf5-7fbe-4d80-9e14-8147444a93e2",
+      "name": "Enrich Lead"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "/**\n * Pemo Lead Scoring Engine — bundled for n8n Code node.\n *\n * AUTO-GENERATED. Do not edit directly.\n * Source: scoring-engine/score.js + lib/*.js\n * Config: scoring-engine/config.json\n * Regenerate: node scoring-engine/build-bundle.js\n *\n * Built: 2026-05-02T11:21:56.912Z\n *\n * The source-of-truth is the modular version with unit tests\n * (scoring-engine/run-tests.js — 12/12 passing). This bundle exists\n * solely to satisfy n8n Code node's lack of require() support.\n */\n\n// --- shared helpers (hoisted) ---\nfunction round1(n) { return Math.round(n * 10) / 10; }\nfunction round2(n) { return Math.round(n * 100) / 100; }\nfunction clamp(n, min, max) { return Math.max(min, Math.min(max, n)); }\nfunction formatHours(h) {\n  if (h < 1) return Math.round(h * 60) + \"m\";\n  if (h < 24) return Math.round(h) + \"h\";\n  if (h < 168) return Math.round(h / 24) + \"d\";\n  return Math.round(h / 168) + \"w\";\n}\n\n// --- embedded config (config.json snapshot) ---\nconst CONFIG = {\n  \"score_version\": \"1.0.0\",\n  \"weights\": {\n    \"firmographic\": 35,\n    \"intent\": 30,\n    \"source_quality\": 20,\n    \"engagement\": 15\n  },\n  \"tiers\": {\n    \"hot\": {\n      \"min\": 80,\n      \"max\": 100\n    },\n    \"warm\": {\n      \"min\": 50,\n      \"max\": 79\n    },\n    \"cold\": {\n      \"min\": 0,\n      \"max\": 49\n    }\n  },\n  \"icp\": {\n    \"countries\": {\n      \"tier_1\": [\n        \"AE\",\n        \"SA\"\n      ],\n      \"tier_2\": [\n        \"EG\"\n      ],\n      \"tier_3\": [\n        \"KW\",\n        \"BH\",\n        \"QA\",\n        \"OM\",\n        \"JO\"\n      ],\n      \"out_of_market\": []\n    },\n    \"company_size\": {\n      \"ideal\": {\n        \"min\": 20,\n        \"max\": 200,\n        \"score\": 1\n      },\n      \"acceptable_lower\": {\n        \"min\": 10,\n        \"max\": 19,\n        \"score\": 0.7\n      },\n      \"acceptable_upper\": {\n        \"min\": 201,\n        \"max\": 500,\n        \"score\": 0.8\n      },\n      \"marginal_small\": {\n        \"min\": 5,\n        \"max\": 9,\n        \"score\": 0.4\n      },\n      \"marginal_large\": {\n        \"min\": 501,\n        \"max\": 1000,\n        \"score\": 0.5\n      },\n      \"out_of_fit_small\": {\n        \"min\": 0,\n        \"max\": 4,\n        \"score\": 0.1\n      },\n      \"out_of_fit_large\": {\n        \"min\": 1001,\n        \"max\": 999999,\n        \"score\": 0.2\n      }\n    },\n    \"industries\": {\n      \"high_fit\": [\n        \"saas\",\n        \"software\",\n        \"technology\",\n        \"ecommerce\",\n        \"e-commerce\",\n        \"professional services\",\n        \"consulting\",\n        \"marketing agency\",\n        \"digital agency\",\n        \"media\",\n        \"advertising\",\n        \"fintech\",\n        \"healthtech\",\n        \"edtech\",\n        \"logistics\",\n        \"retail\",\n        \"f&b\",\n        \"food and beverage\",\n        \"hospitality\",\n        \"real estate\",\n        \"construction\"\n      ],\n      \"medium_fit\": [\n        \"manufacturing\",\n        \"wholesale\",\n        \"import export\",\n        \"automotive\",\n        \"education\",\n        \"healthcare\",\n        \"legal\",\n        \"accounting\"\n      ],\n      \"low_fit\": [\n        \"government\",\n        \"non-profit\",\n        \"ngo\",\n        \"agriculture\",\n        \"mining\",\n        \"personal\",\n        \"freelance\"\n      ]\n    }\n  },\n  \"intent_signals\": {\n    \"high_intent_keywords\": [\n      \"demo\",\n      \"pricing\",\n      \"trial\",\n      \"buy\",\n      \"purchase\",\n      \"implement\",\n      \"deploy\",\n      \"evaluate\",\n      \"compare\",\n      \"switch from\",\n      \"moving from\",\n      \"replacing\",\n      \"this quarter\",\n      \"this month\",\n      \"asap\",\n      \"urgent\",\n      \"immediately\",\n      \"decision maker\",\n      \"rfp\",\n      \"proposal\",\n      \"contract\"\n    ],\n    \"medium_intent_keywords\": [\n      \"looking for\",\n      \"interested in\",\n      \"exploring\",\n      \"considering\",\n      \"learn more\",\n      \"tell me about\",\n      \"how does\",\n      \"what is\",\n      \"info\"\n    ],\n    \"low_intent_keywords\": [\n      \"just curious\",\n      \"general question\",\n      \"browsing\",\n      \"research\",\n      \"student\",\n      \"academic\",\n      \"homework\",\n      \"thesis\"\n    ],\n    \"negative_signals\": [\n      \"unsubscribe\",\n      \"remove me\",\n      \"spam\",\n      \"not interested\",\n      \"wrong person\",\n      \"different company\"\n    ],\n    \"high_intent_score\": 1,\n    \"medium_intent_score\": 0.6,\n    \"low_intent_score\": 0.2,\n    \"demo_request_bonus\": 0.2,\n    \"explicit_form_intent_weight\": 0.4\n  },\n  \"source_quality\": {\n    \"referral\": 1,\n    \"partner\": 0.95,\n    \"event\": 0.9,\n    \"webinar\": 0.85,\n    \"content_download\": 0.7,\n    \"organic_search\": 0.65,\n    \"direct\": 0.6,\n    \"social_organic\": 0.55,\n    \"paid_search\": 0.5,\n    \"paid_social\": 0.45,\n    \"cold_outbound\": 0.3,\n    \"list_purchase\": 0.2,\n    \"unknown\": 0.4\n  },\n  \"engagement\": {\n    \"submission_recency_hours\": {\n      \"fresh\": {\n        \"max_hours\": 1,\n        \"score\": 1\n      },\n      \"recent\": {\n        \"max_hours\": 24,\n        \"score\": 0.85\n      },\n      \"this_week\": {\n        \"max_hours\": 168,\n        \"score\": 0.6\n      },\n      \"stale\": {\n        \"max_hours\": 720,\n        \"score\": 0.3\n      },\n      \"very_stale\": {\n        \"max_hours\": 999999,\n        \"score\": 0.1\n      }\n    },\n    \"repeat_visits\": {\n      \"first_visit\": 0.4,\n      \"few_visits\": {\n        \"min\": 2,\n        \"max\": 4,\n        \"score\": 0.7\n      },\n      \"engaged\": {\n        \"min\": 5,\n        \"max\": 9,\n        \"score\": 0.9\n      },\n      \"highly_engaged\": {\n        \"min\": 10,\n        \"max\": 9999,\n        \"score\": 1\n      }\n    },\n    \"submission_recency_weight\": 0.6,\n    \"repeat_visits_weight\": 0.4\n  },\n  \"tech_stack_signals\": {\n    \"high_value\": [\n      \"xero\",\n      \"quickbooks\",\n      \"zoho books\",\n      \"tally\",\n      \"sage\",\n      \"netsuite\",\n      \"odoo\"\n    ],\n    \"competitor_signal\": [\n      \"brex\",\n      \"ramp\",\n      \"spendesk\",\n      \"pleo\",\n      \"soldo\",\n      \"mesh payments\"\n    ],\n    \"low_value\": [\n      \"excel\",\n      \"spreadsheet\",\n      \"google sheets\",\n      \"manual\"\n    ],\n    \"high_value_bonus\": 0.1,\n    \"competitor_signal_bonus\": 0.15,\n    \"low_value_bonus\": 0.05\n  },\n  \"confidence\": {\n    \"required_fields\": [\n      \"company_name\",\n      \"email\",\n      \"country\"\n    ],\n    \"important_fields\": [\n      \"company_size\",\n      \"raw_message\",\n      \"source\"\n    ],\n    \"enrichment_fields\": [\n      \"industry\",\n      \"website\",\n      \"tech_stack\"\n    ],\n    \"weights\": {\n      \"required\": 0.5,\n      \"important\": 0.3,\n      \"enrichment\": 0.2\n    }\n  }\n};\n\n// --- firmographic.js ---\n/**\n * Firmographic fit scoring\n * Evaluates: country (ICP region), company size band, industry match\n */\n\nfunction scoreCountry(lead, config) {\n  if (!lead.country) return { score: 0, reason: \"country missing\" };\n\n  const country = lead.country.trim().toUpperCase();\n  const { tier_1, tier_2, tier_3, out_of_market } = config.icp.countries;\n\n  if (out_of_market.includes(country)) {\n    return { score: 0, reason: `country ${country} is out-of-market` };\n  }\n  if (tier_1.includes(country)) {\n    return { score: 1.0, reason: `tier-1 market (${country})` };\n  }\n  if (tier_2.includes(country)) {\n    return { score: 0.7, reason: `tier-2 market (${country})` };\n  }\n  if (tier_3.includes(country)) {\n    return { score: 0.4, reason: `tier-3 market (${country})` };\n  }\n  return { score: 0.15, reason: `country ${country} outside primary ICP` };\n}\n\nfunction scoreCompanySize(lead, config) {\n  const size = parseCompanySize(lead.company_size);\n  if (size === null) return { score: 0.3, reason: \"company size unknown (default 0.3)\" };\n\n  const bands = config.icp.company_size;\n  for (const [bandName, band] of Object.entries(bands)) {\n    if (size >= band.min && size <= band.max) {\n      return { score: band.score, reason: `${size} employees → ${bandName.replace(/_/g, \" \")}` };\n    }\n  }\n  return { score: 0.1, reason: `${size} employees → no matching band` };\n}\n\nfunction scoreIndustry(lead, config) {\n  const industry = (lead.industry || \"\").toLowerCase().trim();\n  if (!industry) return { score: 0.4, reason: \"industry unknown (default 0.4)\" };\n\n  const { high_fit, medium_fit, low_fit } = config.icp.industries;\n\n  if (high_fit.some((i) => industry.includes(i))) {\n    return { score: 1.0, reason: `high-fit industry (${industry})` };\n  }\n  if (medium_fit.some((i) => industry.includes(i))) {\n    return { score: 0.6, reason: `medium-fit industry (${industry})` };\n  }\n  if (low_fit.some((i) => industry.includes(i))) {\n    return { score: 0.15, reason: `low-fit industry (${industry})` };\n  }\n  return { score: 0.4, reason: `industry \"${industry}\" not classified` };\n}\n\n/**\n * Accepts company_size as number or descriptive string (\"11-50\", \"200+\", \"small\")\n * Returns numeric employee count midpoint, or null if unparseable.\n */\nfunction parseCompanySize(raw) {\n  if (raw === null || raw === undefined || raw === \"\") return null;\n  if (typeof raw === \"number\") return raw;\n\n  const s = String(raw).toLowerCase().trim();\n\n  // explicit numeric\n  const num = Number(s);\n  if (!Number.isNaN(num)) return num;\n\n  // range \"11-50\" or \"11 to 50\"\n  const range = s.match(/(\\d+)\\s*[-–to]+\\s*(\\d+)/);\n  if (range) return Math.round((Number(range[1]) + Number(range[2])) / 2);\n\n  // open-ended \"200+\" or \"1000+\"\n  const plus = s.match(/(\\d+)\\+/);\n  if (plus) return Number(plus[1]) + 50;\n\n  // common descriptors\n  const descriptors = {\n    \"micro\": 5, \"very small\": 8, \"small\": 25, \"smb\": 50,\n    \"medium\": 150, \"mid-market\": 300, \"mid market\": 300,\n    \"large\": 750, \"enterprise\": 2000\n  };\n  for (const [word, val] of Object.entries(descriptors)) {\n    if (s.includes(word)) return val;\n  }\n\n  return null;\n}\n\nfunction scoreFirmographic(lead, config) {\n  const country = scoreCountry(lead, config);\n  const size = scoreCompanySize(lead, config);\n  const industry = scoreIndustry(lead, config);\n\n  // weighted: country 50%, size 30%, industry 20%\n  const raw = country.score * 0.5 + size.score * 0.3 + industry.score * 0.2;\n\n  return {\n    raw: round2(raw),\n    weighted: round2(raw * config.weights.firmographic),\n    max: config.weights.firmographic,\n    signals: [\n      `country: ${country.reason} (${country.score})`,\n      `size: ${size.reason} (${size.score})`,\n      `industry: ${industry.reason} (${industry.score})`\n    ]\n  };\n}\n\n\n\n// --- intent.js ---\n/**\n * Intent signal scoring\n * Evaluates: keywords in raw message, demo request flag, explicit form intent\n */\n\nfunction scoreIntent(lead, config) {\n  const message = (lead.raw_message || \"\").toLowerCase();\n  const cfg = config.intent_signals;\n\n  const matches = {\n    high: cfg.high_intent_keywords.filter((k) => message.includes(k)),\n    medium: cfg.medium_intent_keywords.filter((k) => message.includes(k)),\n    low: cfg.low_intent_keywords.filter((k) => message.includes(k)),\n    negative: cfg.negative_signals.filter((k) => message.includes(k))\n  };\n\n  // Negative signals are disqualifying — return near-zero\n  if (matches.negative.length > 0) {\n    return {\n      raw: 0,\n      weighted: 0,\n      max: config.weights.intent,\n      signals: [`negative signal detected: \"${matches.negative.join(\", \")}\" — disqualifying intent`]\n    };\n  }\n\n  // Base keyword score: take highest tier match found\n  let keywordScore = 0;\n  let keywordReason = \"no intent keywords detected\";\n\n  if (matches.high.length > 0) {\n    keywordScore = cfg.high_intent_score;\n    keywordReason = `high-intent keywords: ${matches.high.slice(0, 3).join(\", \")}`;\n  } else if (matches.medium.length > 0) {\n    keywordScore = cfg.medium_intent_score;\n    keywordReason = `medium-intent keywords: ${matches.medium.slice(0, 3).join(\", \")}`;\n  } else if (matches.low.length > 0) {\n    keywordScore = cfg.low_intent_score;\n    keywordReason = `low-intent keywords: ${matches.low.slice(0, 3).join(\", \")}`;\n  }\n\n  // Demo request explicit signal — bonus\n  const isDemoRequest = looksLikeDemoRequest(lead);\n  const demoBonus = isDemoRequest ? cfg.demo_request_bonus : 0;\n\n  // Explicit form intent (when intake form has a \"demo\" / \"pricing\" field)\n  const explicitIntent = lead.form_intent || lead.inquiry_type || null;\n  let explicitBonus = 0;\n  let explicitReason = null;\n  if (explicitIntent) {\n    const ei = explicitIntent.toLowerCase();\n    if ([\"demo\", \"pricing\", \"buy\", \"trial\"].some((k) => ei.includes(k))) {\n      explicitBonus = cfg.explicit_form_intent_weight;\n      explicitReason = `explicit form intent: \"${explicitIntent}\"`;\n    } else if ([\"info\", \"general\", \"question\"].some((k) => ei.includes(k))) {\n      explicitBonus = cfg.explicit_form_intent_weight * 0.4;\n      explicitReason = `general inquiry form intent: \"${explicitIntent}\"`;\n    }\n  }\n\n  // Combine — clamp to [0, 1]\n  const raw = Math.min(1, keywordScore + demoBonus + explicitBonus);\n\n  const signals = [keywordReason];\n  if (isDemoRequest) signals.push(`demo request signal (+${cfg.demo_request_bonus})`);\n  if (explicitReason) signals.push(`${explicitReason} (+${round2(explicitBonus)})`);\n\n  return {\n    raw: round2(raw),\n    weighted: round2(raw * config.weights.intent),\n    max: config.weights.intent,\n    signals\n  };\n}\n\nfunction looksLikeDemoRequest(lead) {\n  const message = (lead.raw_message || \"\").toLowerCase();\n  const source = (lead.source || \"\").toLowerCase();\n  const formIntent = (lead.form_intent || lead.inquiry_type || \"\").toLowerCase();\n\n  const demoTerms = [\"demo\", \"schedule a call\", \"book a meeting\", \"see it in action\", \"walkthrough\"];\n  return (\n    demoTerms.some((t) => message.includes(t)) ||\n    source.includes(\"demo\") ||\n    formIntent.includes(\"demo\")\n  );\n}\n\n\n\n// --- source.js ---\n/**\n * Source quality scoring\n * Evaluates: lead source channel weighted by historical conversion proxy\n */\n\nfunction scoreSourceQuality(lead, config) {\n  const source = normalizeSource(lead.source);\n  const weights = config.source_quality;\n\n  const score = weights[source] !== undefined ? weights[source] : weights.unknown;\n  const reason = weights[source] !== undefined\n    ? `source \"${source}\" weighted at ${score}`\n    : `source \"${lead.source || \"missing\"}\" not in registry, defaulted to unknown (${score})`;\n\n  return {\n    raw: round2(score),\n    weighted: round2(score * config.weights.source_quality),\n    max: config.weights.source_quality,\n    signals: [reason]\n  };\n}\n\n/**\n * Map free-form source strings to canonical keys.\n * Handles common variations from different intake channels.\n */\nfunction normalizeSource(raw) {\n  if (!raw) return \"unknown\";\n\n  const s = String(raw).toLowerCase().trim();\n\n  const map = {\n    referral: [\"referral\", \"referred\", \"word of mouth\", \"existing customer\"],\n    partner: [\"partner\", \"partnership\", \"reseller\", \"channel partner\"],\n    event: [\"event\", \"conference\", \"trade show\", \"expo\", \"summit\"],\n    webinar: [\"webinar\", \"virtual event\", \"online event\"],\n    content_download: [\"content\", \"download\", \"ebook\", \"whitepaper\", \"guide\", \"resource\"],\n    organic_search: [\"organic\", \"seo\", \"google search\", \"organic search\"],\n    direct: [\n      \"direct\", \"type-in\", \"bookmark\",\n      \"website_form\", \"website form\", \"website\",\n      \"contact_form\", \"contact form\",\n      \"lead_form\", \"lead form\",\n      \"demo_request\", \"demo request\",\n      \"inbound\", \"form_submission\", \"form submission\"\n    ],\n    social_organic: [\"social\", \"linkedin\", \"twitter\", \"facebook organic\", \"instagram\"],\n    paid_search: [\"paid search\", \"google ads\", \"sem\", \"ppc\", \"cpc\"],\n    paid_social: [\"paid social\", \"linkedin ads\", \"facebook ads\", \"meta ads\", \"instagram ads\"],\n    cold_outbound: [\"cold\", \"outbound\", \"outreach\", \"sdr\", \"bdr\"],\n    list_purchase: [\"list\", \"purchased list\", \"data provider\", \"zoominfo\", \"apollo\"]\n  };\n\n  for (const [canonical, aliases] of Object.entries(map)) {\n    if (aliases.some((a) => s.includes(a))) return canonical;\n  }\n  return \"unknown\";\n}\n\n\n\n// --- engagement.js ---\n/**\n * Engagement recency scoring\n * Evaluates: time since submission + repeat visits if available\n */\n\nfunction scoreEngagement(lead, config, now = new Date()) {\n  const cfg = config.engagement;\n\n  const recency = scoreSubmissionRecency(lead, cfg, now);\n  const visits = scoreRepeatVisits(lead, cfg);\n\n  const raw = recency.score * cfg.submission_recency_weight + visits.score * cfg.repeat_visits_weight;\n\n  return {\n    raw: round2(raw),\n    weighted: round2(raw * config.weights.engagement),\n    max: config.weights.engagement,\n    signals: [recency.reason, visits.reason]\n  };\n}\n\nfunction scoreSubmissionRecency(lead, cfg, now) {\n  const ts = lead.submitted_at || lead.created_at;\n  if (!ts) {\n    return { score: 0.5, reason: \"submission timestamp missing (default 0.5)\" };\n  }\n\n  const submittedDate = new Date(ts);\n  if (Number.isNaN(submittedDate.getTime())) {\n    return { score: 0.5, reason: `unparseable timestamp \"${ts}\" (default 0.5)` };\n  }\n\n  const hoursAgo = (now.getTime() - submittedDate.getTime()) / (1000 * 60 * 60);\n  if (hoursAgo < 0) {\n    return { score: 0.85, reason: \"future timestamp — clock skew, treating as fresh\" };\n  }\n\n  const bands = cfg.submission_recency_hours;\n  for (const [bandName, band] of Object.entries(bands)) {\n    if (hoursAgo <= band.max_hours) {\n      return { score: band.score, reason: `submitted ${formatHours(hoursAgo)} ago → ${bandName}` };\n    }\n  }\n  return { score: 0.1, reason: `submitted ${formatHours(hoursAgo)} ago → very stale` };\n}\n\nfunction scoreRepeatVisits(lead, cfg) {\n  const visits = Number(lead.visit_count || 0);\n  if (visits <= 1) return { score: cfg.repeat_visits.first_visit, reason: \"first visit\" };\n\n  const fv = cfg.repeat_visits.few_visits;\n  if (visits >= fv.min && visits <= fv.max) {\n    return { score: fv.score, reason: `${visits} visits (few)` };\n  }\n\n  const eng = cfg.repeat_visits.engaged;\n  if (visits >= eng.min && visits <= eng.max) {\n    return { score: eng.score, reason: `${visits} visits (engaged)` };\n  }\n\n  const high = cfg.repeat_visits.highly_engaged;\n  if (visits >= high.min) {\n    return { score: high.score, reason: `${visits} visits (highly engaged)` };\n  }\n\n  return { score: 0.4, reason: `${visits} visits` };\n}\n\n\n\n// --- confidence.js ---\n/**\n * Confidence scoring\n * Tracks how complete the input data is.\n * Low confidence → score should be treated cautiously and flagged for review.\n */\n\nfunction calculateConfidence(lead, config) {\n  const cfg = config.confidence;\n\n  const reqPresent = countPresent(lead, cfg.required_fields);\n  const impPresent = countPresent(lead, cfg.important_fields);\n  const enrPresent = countPresent(lead, cfg.enrichment_fields);\n\n  const reqRatio = reqPresent / cfg.required_fields.length;\n  const impRatio = impPresent / cfg.important_fields.length;\n  const enrRatio = enrPresent / cfg.enrichment_fields.length;\n\n  const confidence =\n    reqRatio * cfg.weights.required +\n    impRatio * cfg.weights.important +\n    enrRatio * cfg.weights.enrichment;\n\n  const missing = [\n    ...cfg.required_fields.filter((f) => !isPresent(lead, f)),\n    ...cfg.important_fields.filter((f) => !isPresent(lead, f)),\n    ...cfg.enrichment_fields.filter((f) => !isPresent(lead, f))\n  ];\n\n  return {\n    score: round2(confidence),\n    missing_fields: missing,\n    breakdown: {\n      required: `${reqPresent}/${cfg.required_fields.length}`,\n      important: `${impPresent}/${cfg.important_fields.length}`,\n      enrichment: `${enrPresent}/${cfg.enrichment_fields.length}`\n    }\n  };\n}\n\nfunction countPresent(lead, fields) {\n  return fields.filter((f) => isPresent(lead, f)).length;\n}\n\nfunction isPresent(lead, field) {\n  const v = lead[field];\n  if (v === null || v === undefined) return false;\n  if (typeof v === \"string\" && v.trim() === \"\") return false;\n  if (Array.isArray(v) && v.length === 0) return false;\n  return true;\n}\n\n\n\n// --- score.js (orchestrator) ---\n/**\n * Pemo Lead Scoring Engine\n *\n * Pure function: score(lead, config, [now]) → ScoredLead\n *\n * Design principles:\n *  - Deterministic, testable, no side effects\n *  - Zero runtime dependencies (runs in n8n Code node, Node.js, or browser)\n *  - Configurable weights & ICP via config.json — no logic changes needed to retune\n *  - Component breakdown logged with every score for auditability\n *  - Confidence score signals data completeness — low confidence flags for human review\n *  - Score version stamped for forward-compatibility (re-tune without breaking history)\n *  - AI is intentionally NOT used inside the score itself — scoring is deterministic\n *    and explainable. AI generates the qualification *summary* downstream, given the\n *    breakdown produced here.\n *\n * Tier rules (from config):\n *   Hot  ≥ 80\n *   Warm 50–79\n *   Cold < 50\n *\n * Usage:\n *   const { score } = require(\"./score\");\n *   const config = require(\"./config.json\");\n *   const result = score(lead, config);\n */\n\n\n\n\n\n\nfunction score(lead, config, now = new Date()) {\n  validateInput(lead, config);\n\n  const enrichedLead = withTechStackBonus(lead, config);\n\n  const breakdown = {\n    firmographic: scoreFirmographic(enrichedLead, config),\n    intent: scoreIntent(enrichedLead, config),\n    source_quality: scoreSourceQuality(enrichedLead, config),\n    engagement: scoreEngagement(enrichedLead, config, now)\n  };\n\n  let total = clamp(\n    breakdown.firmographic.weighted +\n      breakdown.intent.weighted +\n      breakdown.source_quality.weighted +\n      breakdown.engagement.weighted,\n    0,\n    100\n  );\n\n  // Disqualifying override: negative intent signals (e.g. \"remove me\", \"not interested\")\n  // force the lead to cold regardless of other signals. Respect the user.\n  const disqualified = detectDisqualification(breakdown);\n  if (disqualified) {\n    total = Math.min(total, 10);\n    breakdown.intent.signals.push(\"DISQUALIFIED — total capped at 10\");\n  }\n\n  const tier = computeTier(total, config);\n  const confidence = calculateConfidence(lead, config);\n\n  return {\n    total: round1(total),\n    tier,\n    breakdown,\n    confidence,\n    disqualified,\n    score_version: config.score_version,\n    scored_at: now.toISOString(),\n    rationale_summary: buildShortRationale(breakdown, tier, total)\n  };\n}\n\n/**\n * Tech stack signals act as a small modifier on the firmographic component.\n * Pemo competitors (Brex, Ramp, Spendesk) → strong buying intent for switch.\n * Existing accounting tools → easier integration story.\n * Manual / Excel → biggest pain, prime target.\n */\nfunction withTechStackBonus(lead, config) {\n  const stack = (lead.tech_stack || []).map((t) => String(t).toLowerCase());\n  if (stack.length === 0) return lead;\n\n  const cfg = config.tech_stack_signals;\n  let bonusFactor = 1.0;\n  const signals = [];\n\n  if (stack.some((s) => cfg.competitor_signal.some((k) => s.includes(k)))) {\n    bonusFactor += cfg.competitor_signal_bonus;\n    signals.push(\"competitor product detected → switch opportunity\");\n  }\n  if (stack.some((s) => cfg.high_value.some((k) => s.includes(k)))) {\n    bonusFactor += cfg.high_value_bonus;\n    signals.push(\"modern accounting stack → integration-ready\");\n  }\n  if (stack.some((s) => cfg.low_value.some((k) => s.includes(k)))) {\n    bonusFactor += cfg.low_value_bonus;\n    signals.push(\"manual / spreadsheet workflow → high pain\");\n  }\n\n  return { ...lead, _tech_stack_bonus: bonusFactor, _tech_stack_signals: signals };\n}\n\nfunction detectDisqualification(breakdown) {\n  const intentSignals = breakdown.intent.signals.join(\" \").toLowerCase();\n  return intentSignals.includes(\"negative signal\") || intentSignals.includes(\"disqualifying\");\n}\n\nfunction computeTier(total, config) {\n  const { hot, warm } = config.tiers;\n  if (total >= hot.min) return \"hot\";\n  if (total >= warm.min) return \"warm\";\n  return \"cold\";\n}\n\nfunction buildShortRationale(breakdown, tier, total) {\n  const top = Object.entries(breakdown)\n    .map(([k, v]) => ({ component: k, weighted: v.weighted, max: v.max }))\n    .sort((a, b) => b.weighted - a.weighted);\n\n  const strongest = top[0];\n  const weakest = top[top.length - 1];\n\n  return [\n    `${tier.toUpperCase()} (${total}/100)`,\n    `strongest: ${strongest.component} (${strongest.weighted}/${strongest.max})`,\n    `weakest: ${weakest.component} (${weakest.weighted}/${weakest.max})`\n  ].join(\" | \");\n}\n\nfunction validateInput(lead, config) {\n  if (!lead || typeof lead !== \"object\") {\n    throw new Error(\"score(): lead must be an object\");\n  }\n  if (!config || typeof config !== \"object\") {\n    throw new Error(\"score(): config must be an object\");\n  }\n  if (!config.weights || !config.tiers || !config.icp) {\n    throw new Error(\"score(): config missing required sections (weights, tiers, icp)\");\n  }\n  const sumWeights = Object.values(config.weights).reduce((a, b) => a + b, 0);\n  if (Math.abs(sumWeights - 100) > 0.01) {\n    throw new Error(`score(): config.weights must sum to 100, got ${sumWeights}`);\n  }\n}\n\n\n\n// --- n8n entry point ---\n// Reads the lead from the incoming item, runs the scoring engine,\n// and merges the result back onto the lead under `scoring`.\nconst lead = $input.item.json;\nconst result = score(lead, CONFIG);\n\nreturn {\n  json: {\n    ...lead,\n    scoring: result\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2608,
+        368
+      ],
+      "id": "1cc8938f-7ae2-4284-91b7-2d99abd38eb6",
+      "name": "Score Lead"
+    },
+    {
+      "parameters": {
+        "content": "## 🟢 Lead Scoring Engine\n\nPure-function deterministic scoring. **NOT an LLM call.** Why deterministic:\n- Fully explainable to sales reps (\"here's the breakdown\")\n- Tunable without retraining (\"change the firmographic weight\")\n- Auditable for any compliance question (\"why this lead got cold\")\n- Reproducible — same input always produces same output\n\nThe LLM comes in **next** to write a human-friendly summary of *this* score\nbreakdown. AI explains, deterministic logic decides.\n\n**Source-of-truth lives in the repo** (`scoring-engine/lib/*.js`) with\n12 unit tests. This bundle is auto-generated by `build-bundle.js`.\nVerified against the modular version by `verify-bundle.js`.",
+        "height": 288,
+        "width": 544
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2384,
+        64
+      ],
+      "id": "dfc8e94e-9799-4a70-8fad-4c06b7ce7879",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4o-mini",
+          "mode": "list",
+          "cachedResultName": "GPT-4O-MINI"
+        },
+        "responses": {
+          "values": [
+            {
+              "role": "system",
+              "content": "You are a sales operations analyst at Pemo, a B2B fintech serving SMEs in MENA (UAE, Saudi, Egypt). Pemo provides corporate cards, expense management, and AI-powered accounting.\n\nYour job: read a deterministic lead scoring breakdown and write a 2-3 sentence qualification summary for the sales rep who will receive this lead.\n\nRules:\n- Be specific. Reference the actual signals (country, size, intent keywords, source).\n- Lead with the strongest reason (positive or negative).\n- If the lead is HOT, end with a one-line action (\"recommend immediate demo call\").\n- If COLD or DISQUALIFIED, briefly say why and recommend the appropriate next step (nurture / disqualify).\n- Never invent facts. If a field is missing, don't fabricate it.\n- Output plain text, no markdown, no preamble like \"Here's the summary:\".\n- Maximum 60 words."
+            },
+            {
+              "content": "=Lead profile:\n- Company: {{ $json.company_name }}\n- Contact: {{ $json.contact_name }}\n- Country: {{ $json.country }}\n- Industry: {{ $json.industry }}\n- Company size: {{ $json.company_size }}\n- Source: {{ $json.source }}\n- Tech stack: {{ $json.tech_stack }}\n- Language: {{ $json.language }}\n- Inbound message: \"{{ $json.raw_message }}\"\n\nScoring (deterministic engine):\n- Total: {{ $json.scoring.total }}/100 → {{ $json.scoring.tier.toUpperCase() }}\n- Firmographic: {{ $json.scoring.breakdown.firmographic.weighted }}/{{ $json.scoring.breakdown.firmographic.max }} — signals: {{ $json.scoring.breakdown.firmographic.signals.join(\"; \") }}\n- Intent: {{ $json.scoring.breakdown.intent.weighted }}/{{ $json.scoring.breakdown.intent.max }} — signals: {{ $json.scoring.breakdown.intent.signals.join(\"; \") }}\n- Source quality: {{ $json.scoring.breakdown.source_quality.weighted }}/{{ $json.scoring.breakdown.source_quality.max }} — signals: {{ $json.scoring.breakdown.source_quality.signals.join(\"; \") }}\n- Engagement: {{ $json.scoring.breakdown.engagement.weighted }}/{{ $json.scoring.breakdown.engagement.max }} — signals: {{ $json.scoring.breakdown.engagement.signals.join(\"; \") }}\n- Confidence: {{ $json.scoring.confidence.score }} (missing: {{ $json.scoring.confidence.missing_fields.join(\", \") || \"none\" }})\n- Disqualified: {{ $json.scoring.disqualified }}\n\nWrite the qualification summary now."
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {
+          "maxTokens": 200,
+          "temperature": 0.3
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        2976,
+        368
+      ],
+      "id": "8ff1edcc-2ee6-4c2f-839b-6625fce83ca9",
+      "name": "AI: Qualify Summary",
+      "credentials": {
+        "openAiApi": {
+          "id": "YQSOdRshnmOCa4eW",
+          "name": "Pemo OpenAI"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "/**\n * Merge OpenAI's qualification summary back onto the lead.\n * Handles n8n's OpenAI node Responses API shape (output[].content[].text)\n * plus legacy Chat Completion shapes for portability.\n */\n\nconst lead = $('Score Lead').item.json;\nconst ai = $input.item.json;\n\nfunction extractContent(o) {\n  if (!o) return \"\";\n\n  // Responses API (current n8n OpenAI node default)\n  // shape: { output: [ { content: [ { type: \"output_text\", text: \"...\" } ] } ] }\n  if (Array.isArray(o.output) && o.output[0]?.content) {\n    const block = o.output[0].content.find((c) => c.type === \"output_text\" || typeof c.text === \"string\");\n    if (block?.text) return block.text;\n  }\n\n  // langchain wrapper\n  if (typeof o.text === \"string\" && o.text.trim()) return o.text;\n\n  // chat completion shape\n  if (o.message?.content) return o.message.content;\n  if (o.choices?.[0]?.message?.content) return o.choices[0].message.content;\n\n  // generic fallbacks\n  if (typeof o.content === \"string\") return o.content;\n  if (typeof o.response === \"string\") return o.response;\n\n  return \"\";\n}\n\nconst summary = extractContent(ai).trim();\n\nreturn {\n  json: {\n    ...lead,\n    qualification_summary: summary,\n    _ai: {\n      model: \"gpt-4o-mini\",\n      generated_at: new Date().toISOString()\n    }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        368
+      ],
+      "id": "d4d333af-8d43-4bd1-a2e7-a0f8880ad09c",
+      "name": "Attach Summary"
+    },
+    {
+      "parameters": {
+        "content": "## 🟣 AI Qualification Summary\n\nCalls **gpt-4o-mini** to convert the deterministic scoring breakdown\ninto a 2-3 sentence human-readable explanation for the sales rep.\n\n**Key principle**: AI explains, scoring engine decides.\nThe score is fixed by the algorithm - the LLM is only allowed to\ndescribe it. This avoids hallucinated qualification calls and\nkeeps scoring auditable and reproducible.\n\nTemperature 0.3 for consistent, factual output. Prompt forbids\nmarkdown and preamble so the summary drops cleanly into Slack\nalerts and HubSpot notes downstream.\n",
+        "height": 256,
+        "width": 480
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        2976,
+        96
+      ],
+      "id": "2f3b0df5-1068-404f-9773-3feace58358a",
+      "name": "Sticky Note4"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "/**\n * Build the HubSpot batch upsert payload from the canonical lead.\n *\n * Field mapping is explicit, easy to review, easy to extend.\n * Source channel is normalized to the canonical enum HubSpot expects\n * (raw inbound shape \"website_form\" → canonical \"direct\" attribution etc).\n *\n * Boolean enums are sent as \"true\"/\"false\" strings — that's how HubSpot\n * stores enumeration-backed booleans for the bool field type we created.\n */\n\nconst lead = $input.item.json;\nconst scoring = lead.scoring || {};\nconst breakdown = scoring.breakdown || {};\n\n// --- helpers ---\nfunction splitName(full) {\n  const parts = (full || \"\").trim().split(/\\s+/);\n  if (parts.length === 0) return { firstname: \"\", lastname: \"\" };\n  if (parts.length === 1) return { firstname: parts[0], lastname: \"\" };\n  return { firstname: parts[0], lastname: parts.slice(1).join(\" \") };\n}\n\nfunction countryTier(country) {\n  if (!country) return \"out_of_market\";\n  if ([\"AE\", \"SA\"].includes(country)) return \"tier_1\";\n  if (country === \"EG\") return \"tier_2\";\n  if ([\"KW\", \"BH\", \"QA\", \"OM\", \"JO\"].includes(country)) return \"tier_3\";\n  return \"out_of_market\";\n}\n\nfunction companySizeBand(size) {\n  const n = Number(size);\n  if (!n) return \"unknown\";\n  if (n < 10)   return \"micro\";\n  if (n < 20)   return \"small\";\n  if (n <= 200) return \"ideal\";\n  if (n <= 500) return \"upper\";\n  if (n <= 1000) return \"marginal_large\";\n  return \"out_of_fit_large\";\n}\n\n// Normalize raw inbound source → canonical attribution channel.\n// Mirrors lib/source.js logic but trimmed for n8n.\nfunction canonicalSource(raw) {\n  if (!raw) return \"unknown\";\n  const s = String(raw).toLowerCase().trim();\n  const map = {\n    referral:        [\"referral\", \"referred\", \"word of mouth\"],\n    partner:         [\"partner\", \"partnership\", \"reseller\"],\n    event:           [\"event\", \"conference\", \"trade show\", \"expo\", \"summit\"],\n    webinar:         [\"webinar\", \"virtual event\"],\n    content_download:[\"content\", \"download\", \"ebook\", \"whitepaper\", \"guide\"],\n    organic_search:  [\"organic\", \"seo\", \"google search\"],\n    direct:          [\"direct\", \"website_form\", \"website form\", \"website\",\n                      \"contact_form\", \"lead_form\", \"demo_request\", \"inbound\"],\n    social_organic:  [\"social\", \"linkedin\", \"twitter\", \"facebook organic\", \"instagram\"],\n    paid_search:     [\"paid search\", \"google ads\", \"sem\", \"ppc\"],\n    paid_social:     [\"paid social\", \"linkedin ads\", \"facebook ads\", \"meta ads\"],\n    cold_outbound:   [\"cold\", \"outbound\", \"outreach\", \"sdr\", \"bdr\"],\n    list_purchase:   [\"list\", \"zoominfo\", \"apollo\"]\n  };\n  for (const [canonical, aliases] of Object.entries(map)) {\n    if (aliases.some((a) => s.includes(a))) return canonical;\n  }\n  return \"unknown\";\n}\n\n// --- mapping ---\nconst { firstname, lastname } = splitName(lead.contact_name);\n\nconst properties = {\n  // standard HubSpot fields\n  email:     lead.email,\n  firstname,\n  lastname,\n  phone:     lead.phone || \"\",\n  company:   lead.company_name || \"\",\n  country:   lead.country || \"\",\n  website:   lead.website || \"\",\n  industry:  lead.industry || \"\",\n\n  // Pemo custom contact properties\n  pemo_lead_score:            scoring.total ?? 0,\n  pemo_lead_tier:             scoring.tier || \"cold\",\n  pemo_score_version:         scoring.score_version || \"unknown\",\n  pemo_last_scored_at:        scoring.scored_at || new Date().toISOString(),\n  pemo_score_rationale:       JSON.stringify(breakdown),\n  pemo_qualification_summary: lead.qualification_summary || \"\",\n  pemo_firmographic_score:    breakdown.firmographic?.weighted ?? 0,\n  pemo_intent_score:          breakdown.intent?.weighted ?? 0,\n  pemo_source_score:          breakdown.source_quality?.weighted ?? 0,\n  pemo_engagement_score:      breakdown.engagement?.weighted ?? 0,\n  pemo_confidence:            scoring.confidence?.score ?? 0,\n  pemo_country_tier:          countryTier(lead.country),\n  pemo_lead_source_channel:   canonicalSource(lead.source),\n  pemo_form_intent:           lead.form_intent || \"\",\n  pemo_inbound_source_shape:  lead._source_shape || \"generic\",\n  pemo_request_id:            lead._request_id || \"\",\n  pemo_existing_customer:     lead.existing_customer ? \"true\" : \"false\",\n  pemo_disqualified:          scoring.disqualified ? \"true\" : \"false\",\n  pemo_company_size_band:     companySizeBand(lead.company_size),\n  pemo_visit_count:           Number(lead.visit_count) || 0,\n  pemo_language:              lead.language || \"en\",\n  pemo_raw_message:           lead.raw_message || \"\",\n  pemo_tech_stack_signals:    (lead.tech_stack || []).join(\", \")\n};\n\nconst payload = {\n  inputs: [\n    {\n      idProperty: \"email\",\n      id: lead.email,\n      properties\n    }\n  ]\n};\n\nreturn {\n  json: {\n    ...lead,\n    _hubspot_payload: payload,\n    _hubspot_canonical_source: properties.pemo_lead_source_channel\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3504,
+        368
+      ],
+      "id": "6f356dbd-73d0-458f-92fc-fb8bd4caadf4",
+      "name": "Build HubSpot Payload"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.hubapi.com/crm/v3/objects/contacts/batch/upsert",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "hubspotAppToken",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json._hubspot_payload) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        3792,
+        368
+      ],
+      "id": "d4b898da-2bf8-4ffd-b948-2539770c4dc2",
+      "name": "HubSpot: Upsert Contact",
+      "credentials": {
+        "hubspotAppToken": {
+          "id": "KW7zeDVcuBn5tSOO",
+          "name": "Pemo Hubspot"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "content": "## 🟠 HubSpot - System of Record\n\nSingle batch upsert (`POST /crm/v3/objects/contacts/batch/upsert`)\nkeyed on email. Creates if new, updates if exists.\n\n**Why HTTP Request, not native node:** we set 25+ custom Pemo properties\non every contact. Configuring each field-by-field in the native node UI\nis fragile and tedious. A Code node that builds a typed payload from the\ncanonical lead is explicit, reviewable, and easy to extend (one line per\nnew property).\n\nThe Process node extracts the contact ID and URL - both are passed\ndownstream so Trello cards can deep-link, and outreach can reference\nthe HubSpot record.",
+        "height": 272,
+        "width": 688
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        3504,
+        80
+      ],
+      "id": "5e6e74c8-2a9f-4fc5-bbee-094e0363a1b8",
+      "name": "Sticky Note5"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "/**\n * Extract HubSpot contact reference and merge it back onto the lead.\n * Downstream nodes (Trello, outreach) need both the ID (for API ops) and\n * the URL (for human-clickable references in Trello cards / Slack messages).\n */\n\nconst lead = $('Build HubSpot Payload').item.json;\nconst response = $input.item.json;\n\nconst result = response.results?.[0] || null;\n\nreturn {\n  json: {\n    ...lead,\n    _hubspot: {\n      contact_id:  result?.id || null,\n      contact_url: result?.url || null,\n      created:     !!result?.new,\n      status:      response.status || \"UNKNOWN\",\n      synced_at:   response.completedAt || new Date().toISOString()\n    }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4080,
+        368
+      ],
+      "id": "b8224a26-c0f7-490c-8641-e873642ee9cb",
+      "name": "Process HubSpot Response"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "/**\n * Build the Trello card payload for the lead.\n *\n * - Picks the tier-appropriate board (\"New\" list)\n * - Selects relevant labels (country / language / source / flags) from\n *   the per-board label catalog\n * - Writes a rich markdown description with score breakdown, AI summary,\n *   inbound message, and a deep link back to HubSpot\n *\n * Trello list/label IDs are stable; resolved once via trello-setup/resolve-ids.js\n * and embedded here. Re-run the resolver if board structure changes.\n */\n\nconst lead = $input.item.json;\nconst scoring = lead.scoring || {};\nconst breakdown = scoring.breakdown || {};\n\n// --- catalog (resolved once via trello-setup/resolve-ids.js) ---\nconst TRELLO = {\n  hot: {\n    board_id: \"69f4df87f94b6f57e76f39c9\",\n    list_new: \"69f4e068378115dac4fa5f9c\",\n    labels: {\n      \"UAE\": \"69f51404ade8cb59e7cbc405\",\n      \"KSA\": \"69f51404793810034d57fe00\",\n      \"EGY\": \"69f51404ceaa2db457317a54\",\n      \"GCC\": \"69f514059bdc2d8af9a6a72a\",\n      \"Other\": \"69f51405069eb71dd3c9a08d\",\n      \"EN\": \"69f5140575741888d0860e0a\",\n      \"AR\": \"69f51406f04e9fdb1fd6ca7b\",\n      \"Referral\": \"69f51406dc95e3c890c917d6\",\n      \"Partner\": \"69f51406dab32950f53f4532\",\n      \"Event\": \"69f5140695c6ec4da76bb1d5\",\n      \"Webinar\": \"69f51407175ce5d7593053fa\",\n      \"Content\": \"69f5140795ed937a3db59a83\",\n      \"Organic\": \"69f51407549f47225096e775\",\n      \"Direct\": \"69f5140791eb2a62c02394d0\",\n      \"Social\": \"69f51408bafd9962cc2b97eb\",\n      \"Paid Search\": \"69f514082cd7758b1d72b792\",\n      \"Paid Social\": \"69f51408aa0538aa3b108bbc\",\n      \"Cold Outbound\": \"69f51409339a6cf1f3543761\",\n      \"Demo Request\": \"69f51409c25f9f8a61a1ed66\",\n      \"Low Confidence\": \"69f5140900ae2dd6e4cca5bd\",\n      \"Existing Customer\": \"69f51409c06e1cddf9e49ad2\",\n      \"Disqualified\": \"69f5140a8ccfcfd70a657f8a\",\n      \"Stale\": \"69f5140ad708ecb70f432a80\"\n    }\n  },\n  warm: {\n    board_id: \"69f4dfc5b6ea0d49bb2a5416\",\n    list_new: \"69f4e05a72ae6156147cf191\",\n    labels: {\n      \"UAE\": \"69f5140c84c2d013b5337c23\",\n      \"KSA\": \"69f5140ccb73b80cc865e95a\",\n      \"EGY\": \"69f5140c0454b076007f0d49\",\n      \"GCC\": \"69f5140dac9e4c04c5da6578\",\n      \"Other\": \"69f5140d549f47225096f804\",\n      \"EN\": \"69f5140ead2af601b38523c1\",\n      \"AR\": \"69f5140e8f6f645b60c7631f\",\n      \"Referral\": \"69f5140eb4e7325008650568\",\n      \"Partner\": \"69f5140e69db2845a4c45346\",\n      \"Event\": \"69f5140f9ea7ba578d9ef40c\",\n      \"Webinar\": \"69f5140fbafb50dedb7a1bf7\",\n      \"Content\": \"69f5140fd22b302936584063\",\n      \"Organic\": \"69f5140f94de4936084dd3e6\",\n      \"Direct\": \"69f51410dcb227fdec04664e\",\n      \"Social\": \"69f51410f872a5da957dd47c\",\n      \"Paid Search\": \"69f514104d6fd421f111bda7\",\n      \"Paid Social\": \"69f51411c11cec0b84f65d42\",\n      \"Cold Outbound\": \"69f51411f27724bfec21b4ad\",\n      \"Demo Request\": \"69f51411afae29adb89bbf91\",\n      \"Low Confidence\": \"69f514115ce0f1fc09ada388\",\n      \"Existing Customer\": \"69f514121b7cbb383386822f\",\n      \"Disqualified\": \"69f514122345206cef87e31e\",\n      \"Stale\": \"69f51412adac726e00387caa\"\n    }\n  },\n  cold: {\n    board_id: \"69f4dfe6b0ab38e8b9b9903d\",\n    list_new: \"69f4e03f38ac39b5376ccea0\",\n    labels: {\n      \"UAE\": \"69f51414f746422b8f8e873a\",\n      \"KSA\": \"69f51415399c6702899e1afc\",\n      \"EGY\": \"69f514150786bd64fdccd7be\",\n      \"GCC\": \"69f514150232e5b16a754716\",\n      \"Other\": \"69f51415773125b0473d6c3a\",\n      \"EN\": \"69f514164812f20f0148b79e\",\n      \"AR\": \"69f514164a1aa32efebfae65\",\n      \"Referral\": \"69f51416e583918f71c26516\",\n      \"Partner\": \"69f5141686946c623d462881\",\n      \"Event\": \"69f51417ae70c61e2463e34a\",\n      \"Webinar\": \"69f514175ad7fb7bab3deec4\",\n      \"Content\": \"69f51417b15ee55ae83c107a\",\n      \"Organic\": \"69f514174f94bbf13c9dba2c\",\n      \"Direct\": \"69f51418f1bdf3c3aa7f21ac\",\n      \"Social\": \"69f51418f8e9da699a7e8355\",\n      \"Paid Search\": \"69f51419fbc238d92cf88ea2\",\n      \"Paid Social\": \"69f514190542301e03498d02\",\n      \"Cold Outbound\": \"69f51419a0b4b44f3fe1ba64\",\n      \"Demo Request\": \"69f514192bec3446ae1050d8\",\n      \"Low Confidence\": \"69f5141af4f439e465f6a781\",\n      \"Existing Customer\": \"69f5141ac07f1661b8f70b8b\",\n      \"Disqualified\": \"69f5141a24891762cf08e1b6\",\n      \"Stale\": \"69f5141a4b8802e2b0a4e9ca\"\n    }\n  }\n};\n\n// --- helpers ---\nfunction countryLabel(country) {\n  if (!country) return \"Other\";\n  if (country === \"AE\") return \"UAE\";\n  if (country === \"SA\") return \"KSA\";\n  if (country === \"EG\") return \"EGY\";\n  if ([\"KW\",\"BH\",\"QA\",\"OM\",\"JO\"].includes(country)) return \"GCC\";\n  return \"Other\";\n}\n\nfunction sourceLabel(canonical) {\n  const map = {\n    referral: \"Referral\", partner: \"Partner\", event: \"Event\", webinar: \"Webinar\",\n    content_download: \"Content\", organic_search: \"Organic\", direct: \"Direct\",\n    social_organic: \"Social\", paid_search: \"Paid Search\", paid_social: \"Paid Social\",\n    cold_outbound: \"Cold Outbound\"\n  };\n  return map[canonical] || null;\n}\n\nfunction isStale(submittedAt) {\n  if (!submittedAt) return false;\n  const days = (Date.now() - new Date(submittedAt).getTime()) / 86400000;\n  return days > 7;\n}\n\nfunction fmtSignals(arr) {\n  return (arr || []).map((s) => `  - ${s}`).join(\"\\n\");\n}\n\n// --- pick board + labels ---\nconst tier = scoring.tier || \"cold\";\nconst target = TRELLO[tier];\nif (!target) throw new Error(`Unknown tier: ${tier}`);\n\nconst labelsByName = target.labels;\nconst selectedLabels = [];\n\nconst cLabel = countryLabel(lead.country);\nif (labelsByName[cLabel]) selectedLabels.push(labelsByName[cLabel]);\n\nconst langLabel = (lead.language || \"en\").toUpperCase();\nif (labelsByName[langLabel]) selectedLabels.push(labelsByName[langLabel]);\n\nconst srcLabel = sourceLabel(lead._hubspot_canonical_source);\nif (srcLabel && labelsByName[srcLabel]) selectedLabels.push(labelsByName[srcLabel]);\n\n// flags\nif ((lead.form_intent || \"\").toLowerCase().includes(\"demo\") || /\\bdemo\\b/i.test(lead.raw_message || \"\")) {\n  if (labelsByName[\"Demo Request\"]) selectedLabels.push(labelsByName[\"Demo Request\"]);\n}\nif (lead.existing_customer && labelsByName[\"Existing Customer\"]) {\n  selectedLabels.push(labelsByName[\"Existing Customer\"]);\n}\nif (scoring.disqualified && labelsByName[\"Disqualified\"]) {\n  selectedLabels.push(labelsByName[\"Disqualified\"]);\n}\nif ((scoring.confidence?.score ?? 1) < 0.6 && labelsByName[\"Low Confidence\"]) {\n  selectedLabels.push(labelsByName[\"Low Confidence\"]);\n}\nif (isStale(lead.submitted_at) && labelsByName[\"Stale\"]) {\n  selectedLabels.push(labelsByName[\"Stale\"]);\n}\n\n// --- card payload ---\nconst name = `[${scoring.total ?? \"?\"}] ${lead.company_name || \"Unknown Co\"} — ${lead.contact_name || \"Unknown Contact\"}`;\n\nconst desc = [\n  `**Tier:** ${tier.toUpperCase()} — ${scoring.total ?? \"?\"}/100  |  Confidence: ${scoring.confidence?.score ?? \"?\"}`,\n  ``,\n  `**Qualification Summary**`,\n  lead.qualification_summary || \"_(no summary generated)_\",\n  ``,\n  `**Lead Profile**`,\n  `- Country: ${lead.country || \"?\"}  |  Industry: ${lead.industry || \"?\"}  |  Size: ${lead.company_size || \"?\"}`,\n  `- Source: ${lead._hubspot_canonical_source || \"unknown\"} (raw: ${lead.source || \"?\"})`,\n  `- Language: ${lead.language || \"en\"}`,\n  `- Tech stack: ${(lead.tech_stack || []).join(\", \") || \"_none detected_\"}`,\n  ``,\n  `**Score Breakdown**`,\n  `- **Firmographic** ${breakdown.firmographic?.weighted ?? 0}/${breakdown.firmographic?.max ?? 0}`,\n  fmtSignals(breakdown.firmographic?.signals),\n  `- **Intent** ${breakdown.intent?.weighted ?? 0}/${breakdown.intent?.max ?? 0}`,\n  fmtSignals(breakdown.intent?.signals),\n  `- **Source Quality** ${breakdown.source_quality?.weighted ?? 0}/${breakdown.source_quality?.max ?? 0}`,\n  fmtSignals(breakdown.source_quality?.signals),\n  `- **Engagement** ${breakdown.engagement?.weighted ?? 0}/${breakdown.engagement?.max ?? 0}`,\n  fmtSignals(breakdown.engagement?.signals),\n  ``,\n  `**Inbound Message**`,\n  `> ${(lead.raw_message || \"_(no message)_\").replace(/\\n/g, \"\\n> \")}`,\n  ``,\n  `---`,\n  `🔗 [HubSpot Contact](${lead._hubspot?.contact_url || \"#\"})  |  📧 ${lead.email}  |  ☎️ ${lead.phone || \"—\"}`,\n  `Request ID: \\`${lead._request_id || \"?\"}\\``\n].join(\"\\n\");\n\nconst cardPayload = {\n  idList: target.list_new,\n  name,\n  desc,\n  idLabels: selectedLabels,        // array — for native Trello node\n  idLabels_csv: selectedLabels.join(\",\"),  // kept as fallback for HTTP Request\n  pos: \"top\"\n};\n\nreturn {\n  json: {\n    ...lead,\n    _trello_payload: cardPayload,\n    _trello_target: { tier, board_id: target.board_id, list_id: target.list_new, labels_applied: selectedLabels.length }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4240,
+        368
+      ],
+      "id": "3e126793-ed20-4b14-9adf-20f5f23c7787",
+      "name": "Build Trello Card"
+    },
+    {
+      "parameters": {
+        "listId": "={{ $json._trello_payload.idList }}",
+        "name": "={{ $json._trello_payload.name }}",
+        "description": "={{ $json._trello_payload.desc }}",
+        "additionalFields": {
+          "pos": "top",
+          "idLabels": "={{ $json._trello_payload.idLabels }}"
+        }
+      },
+      "type": "n8n-nodes-base.trello",
+      "typeVersion": 1,
+      "position": [
+        4752,
+        368
+      ],
+      "id": "196b3f30-44d1-49dd-bca3-ae8e87a8037c",
+      "name": "Trello: Create Card",
+      "alwaysOutputData": false,
+      "credentials": {
+        "trelloApi": {
+          "id": "57e4XkftkmlMpnpg",
+          "name": "Pemo Trello"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "content": "## 🟢 Trello - Visual Ops Board\n\nCard lands on the tier-appropriate board (Hot / Warm / Cold) in the\n\"New\" list, with labels for country, language, source, and operational\nflags (Demo Request, Existing Customer, Disqualified, Stale, Low\nConfidence).\n\n**Native Trello node** - clean fit for single-card creation. Why native\nhere but HTTP for HubSpot: Trello card has a stable, well-modeled shape\n(list / name / desc / labels). HubSpot has 25+ custom properties that\nchange with our scoring config - direct API control wins there.\n\nThe card description is full markdown: AI summary, score breakdown,\ninbound message, deep link to HubSpot. Sales rep clicks one card and\nhas everything they need to make a call.",
+        "height": 288,
+        "width": 608
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4240,
+        64
+      ],
+      "id": "36e92636-ac35-4206-be70-fe871e3e9a95",
+      "name": "Sticky Note6"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "/**\n * Round-robin rep assignment within a geo + language bucket.\n *\n * Bucket strategy: country tier × language. A KSA Arabic lead goes\n * to a different bucket than a UAE English lead. Disqualified leads\n * skip assignment entirely (handled at switch downstream).\n *\n * Selection within bucket: deterministic hash of the lead's request_id.\n * This is *not* strict round-robin — strict RR requires a persistent\n * counter (Google Sheet, Redis, n8n static data). Hash-based gives\n * even distribution at scale and is reproducible (same lead always\n * goes to same rep, useful for re-runs and debugging).\n *\n * Production upgrade path documented in DESIGN_DECISIONS.md.\n */\n\nconst lead = $('Build Trello Card').item.json;\nconst trelloCard = $input.item.json;\n\n// --- mock rep registry ---\n// Each rep declares the buckets they cover (country_tier + languages).\nconst REPS = [\n  { email: \"sara@pemo.io\",    name: \"Sara Hassan\",        slack: \"U_SARA_MOCK\",    countries: [\"AE\",\"SA\"],          languages: [\"en\"]        },\n  { email: \"khalid@pemo.io\",  name: \"Khalid Al-Otaibi\",   slack: \"U_KHALID_MOCK\",  countries: [\"SA\",\"AE\",\"KW\",\"QA\"],languages: [\"ar\",\"en\"]   },\n  { email: \"mohamed@pemo.io\", name: \"Mohamed Ali\",        slack: \"U_MOHAMED_MOCK\", countries: [\"EG\",\"JO\",\"LB\"],     languages: [\"ar\",\"en\"]   },\n  { email: \"layla@pemo.io\",   name: \"Layla Ahmed\",        slack: \"U_LAYLA_MOCK\",   countries: [\"AE\"],               languages: [\"en\"]        },\n  { email: \"fallback@pemo.io\",name: \"Global Pool\",        slack: \"U_FALLBACK_MOCK\",countries: [\"*\"],                languages: [\"en\",\"ar\"]   }\n];\n\nfunction eligible(lead) {\n  const country = lead.country || \"\";\n  const lang = lead.language || \"en\";\n  // Specific matches first — exclude wildcards\n  const specific = REPS.filter((r) => {\n    const countryOk = r.countries.includes(country) && !r.countries.includes(\"*\");\n    const langOk = r.languages.includes(lang);\n    return countryOk && langOk;\n  });\n  return specific;\n}\n\nfunction fallback(lead) {\n  const lang = lead.language || \"en\";\n  return REPS.filter((r) => r.countries.includes(\"*\") && r.languages.includes(lang));\n}\n\n// FNV-1a 32-bit hash, deterministic and dependency-free\nfunction hash32(str) {\n  let h = 2166136261;\n  for (let i = 0; i < str.length; i++) {\n    h ^= str.charCodeAt(i);\n    h = (h + ((h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24))) >>> 0;\n  }\n  return h;\n}\n\nfunction pickRep(lead) {\n  const specificPool = eligible(lead);\n  const pool = specificPool.length > 0 ? specificPool : fallback(lead);\n  if (pool.length === 0) {\n    return { rep: null, reason: `no rep covers country=${lead.country} language=${lead.language}` };\n  }\n  const idx = hash32(lead._request_id || lead.email || \"\") % pool.length;\n  const reasonNote = specificPool.length > 0\n    ? `bucket=${lead.country}/${lead.language}, ${pool.length} specific rep(s) eligible`\n    : `bucket=${lead.country}/${lead.language}, no specific rep — falling back to global pool`;\n  return { rep: pool[idx], reason: reasonNote };\n}\n\nconst { rep, reason } = pickRep(lead);\n\nreturn {\n  json: {\n    ...lead,\n    _trello_card: {\n      id: trelloCard.id,\n      url: trelloCard.url,\n      shortUrl: trelloCard.shortUrl,\n      idList: trelloCard.idList,\n      idBoard: trelloCard.idBoard\n    },\n    _assignment: rep\n      ? {\n          rep_email: rep.email,\n          rep_name: rep.name,\n          rep_slack: rep.slack,\n          bucket_reason: reason,\n          assigned_at: new Date().toISOString()\n        }\n      : {\n          rep_email: null,\n          rep_name: null,\n          rep_slack: null,\n          bucket_reason: reason,\n          assigned_at: new Date().toISOString(),\n          unassigned: true\n        }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5136,
+        368
+      ],
+      "id": "58fd811f-2cc7-4c64-ad49-94e7b04f8cb5",
+      "name": "Assign Rep"
+    },
+    {
+      "parameters": {
+        "content": "## 🔵 Rep Assignment\n\nRound-robin within a **geo × language bucket**. A KSA Arabic lead can\nonly land with a rep who covers KSA AND speaks Arabic.\n\n**Selection inside bucket** = deterministic hash of the lead's\nrequest_id. Not strict round-robin - strict RR requires a persistent\ncounter (Google Sheet, Redis, n8n static data). Hash-based gives:\n- even distribution at scale\n- reproducibility (same lead → same rep, helps debugging + re-runs)\n- zero state, zero coordination overhead\n\nIf no rep matches the bucket, the lead is marked `unassigned` and\nrouted to a global fallback queue downstream.\n\n**Mock rep registry** is hardcoded here for the demo. Production\nwould query HubSpot's user model or a dedicated reps table.\nProduction upgrade path: see DESIGN_DECISIONS.md.",
+        "height": 336,
+        "width": 592
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        4896,
+        16
+      ],
+      "id": "dd4335aa-9dee-4ff1-81be-0a4383ac5cbb",
+      "name": "Sticky Note7"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.scoring.tier }}",
+                    "rightValue": "hot",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "a9356ccd-76ab-417a-b9c1-e10ce38dc7be"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "🔥 Hot"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "0a7ae162-6b30-4a45-89ad-7219029fe183",
+                    "leftValue": "={{ $json.scoring.tier }}",
+                    "rightValue": "warm",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "☀️ Warm"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "38831204-c27c-4833-b640-2d06b23b131e",
+                    "leftValue": "={{ $json.scoring.tier }}",
+                    "rightValue": "cold",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "❄️ Cold"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        5520,
+        368
+      ],
+      "id": "b424522f-c6ff-4978-aee6-b6e48fcbc63e",
+      "name": "Route by Tier"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "hseiwfhymvo1A2zE",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/hseiwfhymvo1A2zE",
+          "cachedResultName": "Pemo: Warm Sequence (Day 0/3/7)"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {
+          "waitForSubWorkflow": false
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        5824,
+        416
+      ],
+      "id": "43042107-5513-44d8-a7ce-8b8bd7b2b5e4",
+      "name": "Trigger Warm Sequence"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "fIfDdpRghzdnqpEs",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/fIfDdpRghzdnqpEs",
+          "cachedResultName": "Pemo: Cold Nurture"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        5824,
+        592
+      ],
+      "id": "c860f5f1-02b8-405f-acc1-c4f9bb738602",
+      "name": "Trigger Cold Nurture"
+    },
+    {
+      "parameters": {
+        "workflowId": {
+          "__rl": true,
+          "value": "j15C4JkXOY6LUydj",
+          "mode": "list",
+          "cachedResultUrl": "/workflow/j15C4JkXOY6LUydj",
+          "cachedResultName": "Pemo: Hot Outreach"
+        },
+        "workflowInputs": {
+          "mappingMode": "defineBelow",
+          "value": {},
+          "matchingColumns": [],
+          "schema": [],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.3,
+      "position": [
+        5824,
+        240
+      ],
+      "id": "5ba5e134-58cb-4075-9609-f451638f2c4d",
+      "name": "Trigger Hot Outreach"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Pre-process",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Pre-process": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Map: Website Form",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Map: Partner Referral",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Map: Event",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Map: Generic",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map: Website Form": {
+      "main": [
+        [
+          {
+            "node": "Merge Branches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Map: Partner Referral": {
+      "main": [
+        [
+          {
+            "node": "Merge Branches",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Map: Event": {
+      "main": [
+        [
+          {
+            "node": "Merge Branches",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Map: Generic": {
+      "main": [
+        [
+          {
+            "node": "Merge Branches",
+            "type": "main",
+            "index": 3
+          }
+        ]
+      ]
+    },
+    "Merge Branches": {
+      "main": [
+        [
+          {
+            "node": "Validate & Finalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate & Finalize": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: Search Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot: Search Contact": {
+      "main": [
+        [
+          {
+            "node": "Dedup Check",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Dedup Check": {
+      "main": [
+        [
+          {
+            "node": "Enrich Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enrich Lead": {
+      "main": [
+        [
+          {
+            "node": "Score Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score Lead": {
+      "main": [
+        [
+          {
+            "node": "AI: Qualify Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI: Qualify Summary": {
+      "main": [
+        [
+          {
+            "node": "Attach Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Attach Summary": {
+      "main": [
+        [
+          {
+            "node": "Build HubSpot Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build HubSpot Payload": {
+      "main": [
+        [
+          {
+            "node": "HubSpot: Upsert Contact",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HubSpot: Upsert Contact": {
+      "main": [
+        [
+          {
+            "node": "Process HubSpot Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process HubSpot Response": {
+      "main": [
+        [
+          {
+            "node": "Build Trello Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Trello Card": {
+      "main": [
+        [
+          {
+            "node": "Trello: Create Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trello: Create Card": {
+      "main": [
+        [
+          {
+            "node": "Assign Rep",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Assign Rep": {
+      "main": [
+        [
+          {
+            "node": "Route by Tier",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Tier": {
+      "main": [
+        [
+          {
+            "node": "Trigger Hot Outreach",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Trigger Warm Sequence",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Trigger Cold Nurture",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "0bee1471-2301-4bd5-93e9-09e144dc373c",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "0487ed9ccc17a9d076650450c968108f2992031fced90b237cc1c26ded8d9e33"
+  },
+  "id": "5k7jr2EaHp8LjjLy",
+  "tags": []
+}
